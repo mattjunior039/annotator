@@ -22,6 +22,8 @@ describe('validated annotation interchange', () => {
     document.annotations.push(painted.mask);
     document.annotations.push({ id: crypto.randomUUID(), classId: document.classes[0]!.id, attributes: {}, kind: 'polygon',
       points: [{ x: 1, y: 1 }, { x: 8, y: 1 }, { x: 4, y: 8 }] });
+    document.annotations.push({ id: crypto.randomUUID(), classId: document.classes[0]!.id, attributes: {}, kind: 'line',
+      points: [{ x: 1, y: 2 }, { x: 28, y: 18 }] });
     const exported = perImageExport(document, 'native', new Map([[document.classes[0]!.id, 0]]), 'sample.png');
     const files = [new File([exported.contents], 'sample.json'), ...painted.tiles.map(tile => new File([tile.pixels], `${tile.id}.bin`))];
     const imported = await importAnnotationFiles(files, 'native', [target], []);

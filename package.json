@@ -14,8 +14,10 @@
     "test": "vitest run",
     "test:browser": "npm run fixtures && playwright test",
     "test:pages": "npm run fixtures && playwright test --config playwright.pages.config.ts",
+    "test:accessibility": "npm run fixtures && playwright test --config playwright.accessibility.config.ts",
     "fixtures": "node scripts/fixtures.mjs",
     "benchmark:corpus": "node scripts/corpus.mjs",
+    "benchmark:browser": "node scripts/benchmark-browser.mjs",
     "inventory": "npm sbom --sbom-format cyclonedx"
   },
   "dependencies": {
@@ -30,6 +32,7 @@
     "@types/node": "^26.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "axe-core": "^4.14.0",
     "sharp": "0.35.5",
     "typescript": "7.0.2",
     "vite": "8.3.4",

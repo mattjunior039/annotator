@@ -23,7 +23,7 @@ test('Pages subpath supports HTML-only CSP, WASM storage, editing, and scoped of
   );
   await expect(page.locator('.gallery-item')).toHaveCount(1);
   await page.locator('.gallery-open').click();
-  await expect(page.getByRole('button', { name: 'Export dataset', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Export', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Images panel', exact: true }).click();
   await expect(page.locator('#editor-images-panel')).toBeHidden();
   await page.getByRole('button', { name: 'Properties panel', exact: true }).click();

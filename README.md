@@ -10,11 +10,11 @@ A local-first image annotator under active development. The current build starts
 - Import folders as a local dataset, add images later, and remove individual images from the encrypted workspace without deleting source files.
 - Import YOLOv8 detection `data.yaml` class names and paired `images/` + `labels/` box annotations. Train/val/test splits are retained when detected.
 - Export YOLO detection, YOLO polygon segmentation, COCO JSON, Pascal VOC XML, CSV, or native annotation JSON. Choose the whole dataset or current image, with sanitized PNG images or annotations only; export does not overwrite the source folder.
-- Annotate with bounding boxes, polygons, tiled binary masks, image labels, and named keypoints; add classes, undo/redo, and set review state.
+- Annotate with bounding boxes, polygons, straight line segments, tiled binary masks, image labels, and named keypoints; add classes, undo/redo, and set review state.
 - Brush/erase masks with copy-on-write encrypted tiles. Selected instances have visibility, locking, primitive JSON attributes, polygon vertex controls, and keypoint visibility controls.
 - Atomically import native JSON with mask sidecars, COCO boxes/simple polygons/uncompressed mask RLE/keypoints, Pascal VOC boxes, YOLO detection, and YOLO segmentation onto existing images.
 - Manage shared dataset classes and named skeleton points. Additions apply to all images and future imports; existing keypoint coordinates are preserved.
-- Use Dataset / Annotate / Export navigation, search/review filters, a compact drawing-tool rail, a large canvas, an active-class panel, zoom/pan, and previous/next image navigation. The Select tool moves shapes, resizes boxes, and adjusts polygon/keypoint vertices.
+- Use Dataset / Annotate / Export navigation, search/review filters, a compact drawing-tool rail, a large canvas, an active-class panel, zoom/pan, and previous/next image navigation. The Select tool moves shapes, resizes boxes, and adjusts polygon, line, and keypoint vertices.
 - Store encrypted records and media in worker-owned SQLite WASM/OPFS storage. The app limits a workspace to 10,000 images, but that scale has not been performance-certified.
 - Explicitly cache the static app shell for tested Chromium offline use. Dataset media and workspace records are not placed in Cache Storage.
 - Inspect storage usage and optionally request persistent browser storage.
@@ -32,7 +32,7 @@ The app does not send dataset images or annotations to a remote service. Product
 - Masks are binary instance masks, not multichannel semantic maps. Limits are 128 current tiles/image, 64 changed tiles/stroke, 512 retained historical tiles/image, and 256 x 256 bytes/tile. Reopen the workspace to prune unreferenced history tiles when its history budget is reached.
 - COCO compressed RLE, polygon holes/multipart objects, and mixed segmentation/keypoints in a single COCO instance are rejected. Imports replace annotations on matched images after confirmation; they do not add image pixels. CSV import is not implemented.
 - Annotation imports have an 8-MiB text-file and 128-MiB selected-input budget. They are parsed into bounded batches, not a fully streaming parser or a certified large-dataset importer.
-- Dataset schema edits currently support additions, not destructive class removal/renaming or skeleton reordering. Older per-image definitions are reconciled by exact name on unlock; conflicting IDs or exclusive groups stop migration explicitly.
+- **Dataset classes and skeletons → Migrate dataset schema** previews class removal/merging and skeleton point reorder/rename/removal. Used classes require a surviving replacement; unused classes can be removed without one. Surviving point names retain coordinates; renaming replaces a point rather than transferring its coordinates. Only discarded, non-placeholder coordinates require confirmation, with affected annotation/image counts shown first. Schema and encrypted documents commit together; stale previews are rejected. Conflicting image-label merges are refused, never deduplicated by deleting annotations. Older per-image IDs and point orders are reconciled by exact name before migration. Class/skeleton definition renaming and whole-skeleton removal remain unsupported.
 - Live collaboration, signaling/TURN, encrypted cloud sync, Hugging Face/Drive adapters, and the privacy-flow explorer are not implemented.
 - AI integration is intentionally excluded.
 - Workspace names, protection settings, and creation times are public local catalog metadata. Avoid sensitive workspace names. A workspace's **Sharing** panel currently explains manual export/backup only; it does not create live rooms or upload data.
@@ -53,13 +53,13 @@ The current cap is 10,000 images per workspace and 10,000 per import; per-image 
 
 ### Annotate an image
 
-Open an image in the dataset. In the left tool rail, choose **Box** and drag to draw a box, or choose **Polygon** and click vertices, then **Finish polygon**. **Image labels** toggles whole-image labels in the right panel; it does not draw shapes. **Keypoint** places points in the dataset's skeleton.
+Open an image in the dataset. In the left tool rail, choose **Box** and drag to draw a box, **Line** and drag between two endpoints to draw a line, or **Polygon** and click vertices. The draft previews its fill and closing edge; click the highlighted first vertex to close it, or press **Enter** / **Finish polygon**. **Image labels** toggles whole-image labels in the right panel; it does not draw shapes. **Keypoint** places points in the dataset's skeleton.
 
 Use **Dataset classes and skeletons** on the dataset page or the editor's **Add a class** / **Add point name** controls. Definitions are encrypted separately and shared across every image. Adding a point preserves existing coordinates and marks the new point absent until placed. Schema changes reset the current image's in-memory undo history so undo cannot overwrite shared definitions. Backups preserve shared definitions even when the dataset contains no images.
 
-Choose **Select** to move an annotation, resize a box with its corner handles, adjust polygon/keypoint vertices, or change the selected annotation's class. Edits save locally after each completed action. Invalid polygons are rejected visibly without replacing the saved shape.
+Choose **Select** to move an annotation, resize a box with its corner handles, adjust polygon/keypoint vertices, move a line endpoint, or change the selected annotation's class. Edits save locally after each completed action. Invalid polygons are rejected visibly without replacing the saved shape.
 
-Shortcuts (when not typing in a field): **1–4** select drawing/labeling tools, **5 / 6** select mask brush/erase, **V** selects editing, **H** selects pan, **+ / -** zoom, **0** fits the image, **Enter** finishes a polygon, **Escape** cancels an unfinished gesture, **Delete** removes the selected annotation, and **Left / Right** changes images. **Ctrl/Cmd+Z** undoes; **Ctrl/Cmd+Shift+Z** redoes. Undo history is in memory for the currently open image, not persisted across image navigation. Choose **Dataset** to return to file management without locking the workspace.
+Shortcuts (when not typing in a field): **1–4** select box/polygon/label/keypoint tools, **L** selects line, **5 / 6** select mask brush/erase, **V** selects editing, **H** selects pan, **+ / -** zoom, **0** fits the image, **Enter** finishes a polygon, **Escape** cancels an unfinished gesture, **Delete** removes the selected annotation, and **Left / Right** changes images. **Ctrl/Cmd+Z** undoes; **Ctrl/Cmd+Shift+Z** redoes. Undo history is in memory for the currently open image, not persisted across image navigation. Choose **Dataset** to return to file management without locking the workspace.
 
 Brush an existing selected mask to extend it; otherwise brushing creates an instance. Erase affects the selected mask. Hidden instances are omitted from the canvas but remain in exports; visibility is not deletion. Locked instances reject edits until explicitly unlocked. JSON attributes accept at most 64 primitive string/number/boolean fields. Select a named keypoint to place it or set absent/occluded/visible status.
 
@@ -95,7 +95,7 @@ Backup/restore requires desktop Chromium's local directory access and the same c
 | YOLO segmentation | Polygons | Split `images/` and `labels/*.txt`, normalized vertices, `data.yaml` |
 | COCO JSON | Boxes, simple polygons, binary masks, keypoints | Per-split `_annotations.coco.json`; uncompressed column-major mask RLE, non-crowd by default (boolean `iscrowd` preserves imported crowd status); one consistent named skeleton per category |
 | Pascal VOC XML | Boxes | Per-image XML; one-based inclusive integer boxes enclosing subpixel coordinates |
-| CSV annotations | Boxes, polygons, image labels, keypoints | `annotations.csv` with JSON pixel geometry, skeleton, attributes, and review columns; this is an app-defined CSV schema, not a universal trainer format |
+| CSV annotations | Boxes, polygons, lines, image labels, keypoints | `annotations.csv` with JSON pixel geometry, skeleton, attributes, and review columns; this is an app-defined CSV schema, not a universal trainer format |
 | Native annotation JSON | All currently editable annotation types | Versioned per-image documents plus raw mask `.bin` sidecars preserving classes, IDs, skeletons, attributes, instance properties, and review state; importable onto existing images, not an encrypted vault backup |
 
 Unsupported annotation types stop preflight before any export files are created; they are never silently omitted or converted. All exports include `export-manifest.json` with original-to-exported image paths, class names, dimensions, and splits. Training formats preserve their supported training geometry/classes, not every editor field.
@@ -143,10 +143,24 @@ The browser suite builds and tests the production app in Chromium. The first bro
 npm run benchmark:corpus
 # Optional: materialize all 10,000 images (disk/CPU-intensive; fresh output only).
 npm run benchmark:corpus -- --write-images
+# Real production UI intake, edit, and bounded-resource measurements (synthetic only).
+npm run benchmark:browser
+# Smaller smoke check, not a 10,000-image performance certification:
+npm run benchmark:browser -- --count 101 --size compact --edits 6 --navigation 6 --budget-seconds 180
 npm run --silent inventory > sbom.cdx.json
 ```
 
 The default corpus command writes only a reproducible 10,000-image descriptor manifest under `benchmarks/generated/reference-corpus`; it is not an import or decode benchmark. See [verification](docs/verification.md).
+
+The browser benchmark uses a fresh isolated production Chromium workspace and
+10,000 reference-size synthetic images by default. Each run preserves raw
+`report.json`, fixture hashes, build fingerprints, and environment metadata in a
+new `benchmarks/generated/browser-*` directory without replacing earlier runs.
+It measures bounded-batch intake, first decoded editor image, label-edit
+acknowledgements, an input-to-render-opportunity proxy, and sampled rendered
+catalog/media resources. It does **not** measure total process memory or certify
+the 768 MiB/pointer-drag release gates. See the verification document for exact
+definitions, smaller-run options, browser budget, and limitations.
 
 ## Architecture and policy
 

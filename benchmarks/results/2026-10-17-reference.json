@@ -1,0 +1,4145 @@
+{
+  "version": 1,
+  "startedAt": "2026-10-17T21:45:05.999Z",
+  "status": "completed",
+  "options": {
+    "count": 10000,
+    "size": "reference",
+    "batch": 100,
+    "edits": 50,
+    "navigation": 30,
+    "budget-seconds": 900,
+    "port": 4187
+  },
+  "environment": {
+    "node": "v26.10.0",
+    "os": "Darwin 27.0.0",
+    "architecture": "arm64",
+    "cpu": "Apple M5 Pro",
+    "logicalCores": 15,
+    "hostRamBytes": 25769803776,
+    "headless": true,
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "deviceScaleFactor": 1,
+    "state": "fresh isolated browser profile and origin; production build; no application storage seeding",
+    "sharp": {
+      "aom": "3.15.1",
+      "archive": "3.8.9",
+      "cairo": "1.18.6",
+      "cgif": "0.5.4",
+      "exif": "0.6.26",
+      "expat": "2.8.5",
+      "ffi": "3.8.0",
+      "fontconfig": "2.18.3",
+      "freetype": "2.14.3",
+      "fribidi": "1.0.17",
+      "glib": "2.90.0",
+      "harfbuzz": "14.5.0",
+      "heif": "1.23.5",
+      "highway": "1.4.0",
+      "imagequant": "2.4.1",
+      "lcms": "2.19.1",
+      "mozjpeg": "0826579",
+      "pango": "1.58.2",
+      "pixman": "0.46.4",
+      "png": "1.6.58",
+      "proxy-libintl": "0.5",
+      "rsvg": "2.63.2",
+      "tiff": "4.7.2",
+      "uhdr": "2.0.2",
+      "vips": "8.18.7",
+      "webp": "1.6.0",
+      "xml2": "2.15.4",
+      "zlib-ng": "2.3.3",
+      "sharp": "0.35.5"
+    },
+    "productionFiles": [
+      {
+        "path": ".nojekyll",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "assets/index-BOs41DeT.css",
+        "bytes": 24030,
+        "sha256": "d4573a474ece1506598baac872d8196efffe76d0bcb7f8dbd046bdf6641dea9a"
+      },
+      {
+        "path": "assets/index-DQPfKc1f.js",
+        "bytes": 555144,
+        "sha256": "c43d47a400a69c0fd372cca194dbbbaa78dba59170949eab63f46ed1b5b8470e"
+      },
+      {
+        "path": "assets/media.worker-DXQXTDuA.js",
+        "bytes": 119444,
+        "sha256": "c50cf50239955740d9ce449644039f65a8880f7371f5d5f9aeb96defe614940b"
+      },
+      {
+        "path": "assets/sqlite3-Con_VOcu.wasm",
+        "bytes": 868907,
+        "sha256": "2ee8f3dab694532afc8840e07703127287662d08b74e6ff50491ce63f00d5752"
+      },
+      {
+        "path": "assets/sqlite3-opfs-async-proxy-Ck-yCayi.js",
+        "bytes": 32505,
+        "sha256": "9f1970e05ee07a79332498858740b705eeb1dcee03bc150f6f690bc0fb5f0a06"
+      },
+      {
+        "path": "assets/sqlite3-worker1-Dl2aatz3.js",
+        "bytes": 212523,
+        "sha256": "788f9e49fd8eb32029efe8db37805eacce3fd85ce8f983f5d4d80295186545c3"
+      },
+      {
+        "path": "assets/storage.worker-CgCYpMU_.js",
+        "bytes": 389470,
+        "sha256": "c2ac4831bd5d2a3b58b546866da910d6098fb2f08344e50e56aa5a6b6e67ce35"
+      },
+      {
+        "path": "index.html",
+        "bytes": 1047,
+        "sha256": "3496b0c9488543a0db3cc66cbeef6fa0025337dfee5823eab9526aa8c0a2f25c"
+      },
+      {
+        "path": "manifest.webmanifest",
+        "bytes": 189,
+        "sha256": "34cc067c43fdff82e9f6f5c0860ad580d7892700b34c32774d49f27b632a8592"
+      },
+      {
+        "path": "sw.js",
+        "bytes": 1834,
+        "sha256": "e8a076930454a8951c57f241c56b3debdf8f7523f79b63baaa7b4ac74e0467bd"
+      }
+    ],
+    "browser": "156.0.8078.4"
+  },
+  "intake": {
+    "batches": [
+      {
+        "offset": 0,
+        "count": 100,
+        "wallMs": 7894.676749999999,
+        "imagesPerSecond": 12.666763081844993
+      },
+      {
+        "offset": 100,
+        "count": 100,
+        "wallMs": 7891.4287079999995,
+        "imagesPerSecond": 12.671976609080202
+      },
+      {
+        "offset": 200,
+        "count": 100,
+        "wallMs": 7890.083332999999,
+        "imagesPerSecond": 12.674137367060938
+      },
+      {
+        "offset": 300,
+        "count": 100,
+        "wallMs": 7892.187542,
+        "imagesPerSecond": 12.670758198259755
+      },
+      {
+        "offset": 400,
+        "count": 100,
+        "wallMs": 7892.9438329999975,
+        "imagesPerSecond": 12.669544103672077
+      },
+      {
+        "offset": 500,
+        "count": 100,
+        "wallMs": 7891.644999999997,
+        "imagesPerSecond": 12.671629299087838
+      },
+      {
+        "offset": 600,
+        "count": 100,
+        "wallMs": 7895.230125000002,
+        "imagesPerSecond": 12.665875271115036
+      },
+      {
+        "offset": 700,
+        "count": 100,
+        "wallMs": 7896.680250000005,
+        "imagesPerSecond": 12.663549344042382
+      },
+      {
+        "offset": 800,
+        "count": 100,
+        "wallMs": 7896.6185419999965,
+        "imagesPerSecond": 12.66364830314733
+      },
+      {
+        "offset": 900,
+        "count": 100,
+        "wallMs": 7889.17349999999,
+        "imagesPerSecond": 12.67559903455034
+      },
+      {
+        "offset": 1000,
+        "count": 100,
+        "wallMs": 7893.264624999996,
+        "imagesPerSecond": 12.669029197789001
+      },
+      {
+        "offset": 1100,
+        "count": 100,
+        "wallMs": 7891.5692909999925,
+        "imagesPerSecond": 12.671750866338568
+      },
+      {
+        "offset": 1200,
+        "count": 100,
+        "wallMs": 6893.997041999988,
+        "imagesPerSecond": 14.505373209587196
+      },
+      {
+        "offset": 1300,
+        "count": 100,
+        "wallMs": 6888.529125000001,
+        "imagesPerSecond": 14.516887159129197
+      },
+      {
+        "offset": 1400,
+        "count": 100,
+        "wallMs": 7900.143958000001,
+        "imagesPerSecond": 12.657997187346949
+      },
+      {
+        "offset": 1500,
+        "count": 100,
+        "wallMs": 7889.864250000013,
+        "imagesPerSecond": 12.674489298088979
+      },
+      {
+        "offset": 1600,
+        "count": 100,
+        "wallMs": 6887.310916000017,
+        "imagesPerSecond": 14.51945486702052
+      },
+      {
+        "offset": 1700,
+        "count": 100,
+        "wallMs": 6933.837582999986,
+        "imagesPerSecond": 14.42202803324593
+      },
+      {
+        "offset": 1800,
+        "count": 100,
+        "wallMs": 7887.002999999997,
+        "imagesPerSecond": 12.679087354220613
+      },
+      {
+        "offset": 1900,
+        "count": 100,
+        "wallMs": 6886.680582999979,
+        "imagesPerSecond": 14.520783822449037
+      },
+      {
+        "offset": 2000,
+        "count": 100,
+        "wallMs": 7890.085749999998,
+        "imagesPerSecond": 12.674133484544198
+      },
+      {
+        "offset": 2100,
+        "count": 100,
+        "wallMs": 7895.271999999997,
+        "imagesPerSecond": 12.665808093755356
+      },
+      {
+        "offset": 2200,
+        "count": 100,
+        "wallMs": 7908.493583999982,
+        "imagesPerSecond": 12.644633132448178
+      },
+      {
+        "offset": 2300,
+        "count": 100,
+        "wallMs": 6893.146875000006,
+        "imagesPerSecond": 14.507162231328477
+      },
+      {
+        "offset": 2400,
+        "count": 100,
+        "wallMs": 6888.304666999989,
+        "imagesPerSecond": 14.517360197360759
+      },
+      {
+        "offset": 2500,
+        "count": 100,
+        "wallMs": 6990.618832999986,
+        "imagesPerSecond": 14.304885216733458
+      },
+      {
+        "offset": 2600,
+        "count": 100,
+        "wallMs": 6933.88970900001,
+        "imagesPerSecond": 14.421919614643217
+      },
+      {
+        "offset": 2700,
+        "count": 100,
+        "wallMs": 6896.688165999978,
+        "imagesPerSecond": 14.49971313666037
+      },
+      {
+        "offset": 2800,
+        "count": 100,
+        "wallMs": 7095.167458000011,
+        "imagesPerSecond": 14.094100046539006
+      },
+      {
+        "offset": 2900,
+        "count": 100,
+        "wallMs": 7890.699791999999,
+        "imagesPerSecond": 12.67314720316507
+      },
+      {
+        "offset": 3000,
+        "count": 100,
+        "wallMs": 7895.080665999994,
+        "imagesPerSecond": 12.666115044352615
+      },
+      {
+        "offset": 3100,
+        "count": 100,
+        "wallMs": 6895.853957999992,
+        "imagesPerSecond": 14.501467201750753
+      },
+      {
+        "offset": 3200,
+        "count": 100,
+        "wallMs": 6990.571708000003,
+        "imagesPerSecond": 14.304981649148967
+      },
+      {
+        "offset": 3300,
+        "count": 100,
+        "wallMs": 7911.126541999984,
+        "imagesPerSecond": 12.640424782627653
+      },
+      {
+        "offset": 3400,
+        "count": 100,
+        "wallMs": 6985.271583999973,
+        "imagesPerSecond": 14.315835654701495
+      },
+      {
+        "offset": 3500,
+        "count": 100,
+        "wallMs": 6890.284167000034,
+        "imagesPerSecond": 14.51318952546758
+      },
+      {
+        "offset": 3600,
+        "count": 100,
+        "wallMs": 6888.663667000015,
+        "imagesPerSecond": 14.516603630838837
+      },
+      {
+        "offset": 3700,
+        "count": 100,
+        "wallMs": 6890.220374999975,
+        "imagesPerSecond": 14.513323893504692
+      },
+      {
+        "offset": 3800,
+        "count": 100,
+        "wallMs": 6884.453582999995,
+        "imagesPerSecond": 14.525481041361546
+      },
+      {
+        "offset": 3900,
+        "count": 100,
+        "wallMs": 7892.213417000021,
+        "imagesPerSecond": 12.670716656571596
+      },
+      {
+        "offset": 4000,
+        "count": 100,
+        "wallMs": 6887.809917000006,
+        "imagesPerSecond": 14.518402976421731
+      },
+      {
+        "offset": 4100,
+        "count": 100,
+        "wallMs": 6893.765165999997,
+        "imagesPerSecond": 14.505861106670606
+      },
+      {
+        "offset": 4200,
+        "count": 100,
+        "wallMs": 6930.262042000017,
+        "imagesPerSecond": 14.42946881286192
+      },
+      {
+        "offset": 4300,
+        "count": 100,
+        "wallMs": 6993.282333000039,
+        "imagesPerSecond": 14.299436979416377
+      },
+      {
+        "offset": 4400,
+        "count": 100,
+        "wallMs": 7893.830499999982,
+        "imagesPerSecond": 12.66812100918562
+      },
+      {
+        "offset": 4500,
+        "count": 100,
+        "wallMs": 7903.058457999956,
+        "imagesPerSecond": 12.653329154964547
+      },
+      {
+        "offset": 4600,
+        "count": 100,
+        "wallMs": 6986.058417000051,
+        "imagesPerSecond": 14.314223275983132
+      },
+      {
+        "offset": 4700,
+        "count": 100,
+        "wallMs": 7097.508666999987,
+        "imagesPerSecond": 14.089450917467992
+      },
+      {
+        "offset": 4800,
+        "count": 100,
+        "wallMs": 6989.715708000003,
+        "imagesPerSecond": 14.306733517866268
+      },
+      {
+        "offset": 4900,
+        "count": 100,
+        "wallMs": 6986.915792000014,
+        "imagesPerSecond": 14.312466756004062
+      },
+      {
+        "offset": 5000,
+        "count": 100,
+        "wallMs": 6887.779541999975,
+        "imagesPerSecond": 14.518467002351738
+      },
+      {
+        "offset": 5100,
+        "count": 100,
+        "wallMs": 7088.797458999965,
+        "imagesPerSecond": 14.106765015981605
+      },
+      {
+        "offset": 5200,
+        "count": 100,
+        "wallMs": 7890.418041999976,
+        "imagesPerSecond": 12.673599734223094
+      },
+      {
+        "offset": 5300,
+        "count": 100,
+        "wallMs": 6986.9923749999725,
+        "imagesPerSecond": 14.312309879971837
+      },
+      {
+        "offset": 5400,
+        "count": 100,
+        "wallMs": 6982.484332999971,
+        "imagesPerSecond": 14.32155021492698
+      },
+      {
+        "offset": 5500,
+        "count": 100,
+        "wallMs": 7726.1413750000065,
+        "imagesPerSecond": 12.943071469488858
+      },
+      {
+        "offset": 5600,
+        "count": 100,
+        "wallMs": 7890.396583000023,
+        "imagesPerSecond": 12.6736342017905
+      },
+      {
+        "offset": 5700,
+        "count": 100,
+        "wallMs": 6931.82462499995,
+        "imagesPerSecond": 14.426216098910713
+      },
+      {
+        "offset": 5800,
+        "count": 100,
+        "wallMs": 6985.168249999988,
+        "imagesPerSecond": 14.31604743378947
+      },
+      {
+        "offset": 5900,
+        "count": 100,
+        "wallMs": 7089.19441700005,
+        "imagesPerSecond": 14.105975110542563
+      },
+      {
+        "offset": 6000,
+        "count": 100,
+        "wallMs": 7888.0626250000205,
+        "imagesPerSecond": 12.677384137781202
+      },
+      {
+        "offset": 6100,
+        "count": 100,
+        "wallMs": 7099.702584000013,
+        "imagesPerSecond": 14.085097061017931
+      },
+      {
+        "offset": 6200,
+        "count": 100,
+        "wallMs": 7088.232707999996,
+        "imagesPerSecond": 14.107888964640924
+      },
+      {
+        "offset": 6300,
+        "count": 100,
+        "wallMs": 7098.117417000001,
+        "imagesPerSecond": 14.088242575489081
+      },
+      {
+        "offset": 6400,
+        "count": 100,
+        "wallMs": 7890.939291999966,
+        "imagesPerSecond": 12.672762557099194
+      },
+      {
+        "offset": 6500,
+        "count": 100,
+        "wallMs": 7888.950750000018,
+        "imagesPerSecond": 12.675956938886932
+      },
+      {
+        "offset": 6600,
+        "count": 100,
+        "wallMs": 7099.679791999981,
+        "imagesPerSecond": 14.08514227820266
+      },
+      {
+        "offset": 6700,
+        "count": 100,
+        "wallMs": 7153.45862499997,
+        "imagesPerSecond": 13.97925188950127
+      },
+      {
+        "offset": 6800,
+        "count": 100,
+        "wallMs": 6985.7743330000085,
+        "imagesPerSecond": 14.314805379213482
+      },
+      {
+        "offset": 6900,
+        "count": 100,
+        "wallMs": 7205.028624999977,
+        "imagesPerSecond": 13.87919537932444
+      },
+      {
+        "offset": 7000,
+        "count": 100,
+        "wallMs": 7897.749542000005,
+        "imagesPerSecond": 12.661834800939543
+      },
+      {
+        "offset": 7100,
+        "count": 100,
+        "wallMs": 7094.85400000005,
+        "imagesPerSecond": 14.094722738480495
+      },
+      {
+        "offset": 7200,
+        "count": 100,
+        "wallMs": 8124.147332999972,
+        "imagesPerSecond": 12.30898405717039
+      },
+      {
+        "offset": 7300,
+        "count": 100,
+        "wallMs": 7894.023167000036,
+        "imagesPerSecond": 12.667811822245131
+      },
+      {
+        "offset": 7400,
+        "count": 100,
+        "wallMs": 7893.007417000015,
+        "imagesPerSecond": 12.669442041143823
+      },
+      {
+        "offset": 7500,
+        "count": 100,
+        "wallMs": 7901.369458000059,
+        "imagesPerSecond": 12.656033935832602
+      },
+      {
+        "offset": 7600,
+        "count": 100,
+        "wallMs": 7891.718958999962,
+        "imagesPerSecond": 12.671510544094692
+      },
+      {
+        "offset": 7700,
+        "count": 100,
+        "wallMs": 7902.893874999951,
+        "imagesPerSecond": 12.653592668926056
+      },
+      {
+        "offset": 7800,
+        "count": 100,
+        "wallMs": 7094.295916000032,
+        "imagesPerSecond": 14.095831522119939
+      },
+      {
+        "offset": 7900,
+        "count": 100,
+        "wallMs": 6996.996583000058,
+        "imagesPerSecond": 14.291846339179378
+      },
+      {
+        "offset": 8000,
+        "count": 100,
+        "wallMs": 7908.327540999977,
+        "imagesPerSecond": 12.644898618773622
+      },
+      {
+        "offset": 8100,
+        "count": 100,
+        "wallMs": 7214.658999999985,
+        "imagesPerSecond": 13.860668951921388
+      },
+      {
+        "offset": 8200,
+        "count": 100,
+        "wallMs": 7892.73662500002,
+        "imagesPerSecond": 12.669876717189933
+      },
+      {
+        "offset": 8300,
+        "count": 100,
+        "wallMs": 7890.895625000005,
+        "imagesPerSecond": 12.672832686213606
+      },
+      {
+        "offset": 8400,
+        "count": 100,
+        "wallMs": 8005.312791999895,
+        "imagesPerSecond": 12.491704271685043
+      },
+      {
+        "offset": 8500,
+        "count": 100,
+        "wallMs": 8224.403416999965,
+        "imagesPerSecond": 12.15893663402971
+      },
+      {
+        "offset": 8600,
+        "count": 100,
+        "wallMs": 8014.810375000001,
+        "imagesPerSecond": 12.476901551148675
+      },
+      {
+        "offset": 8700,
+        "count": 100,
+        "wallMs": 8011.112624999951,
+        "imagesPerSecond": 12.48266060920603
+      },
+      {
+        "offset": 8800,
+        "count": 100,
+        "wallMs": 8215.037750000018,
+        "imagesPerSecond": 12.172798597304046
+      },
+      {
+        "offset": 8900,
+        "count": 100,
+        "wallMs": 8224.311250000028,
+        "imagesPerSecond": 12.15907289500986
+      },
+      {
+        "offset": 9000,
+        "count": 100,
+        "wallMs": 7890.182208999991,
+        "imagesPerSecond": 12.673978540816751
+      },
+      {
+        "offset": 9100,
+        "count": 100,
+        "wallMs": 8151.562125000055,
+        "imagesPerSecond": 12.267587300023102
+      },
+      {
+        "offset": 9200,
+        "count": 100,
+        "wallMs": 8926.669124999898,
+        "imagesPerSecond": 11.202386758118038
+      },
+      {
+        "offset": 9300,
+        "count": 100,
+        "wallMs": 7908.097165999934,
+        "imagesPerSecond": 12.645266984065385
+      },
+      {
+        "offset": 9400,
+        "count": 100,
+        "wallMs": 7906.989207999897,
+        "imagesPerSecond": 12.647038887927783
+      },
+      {
+        "offset": 9500,
+        "count": 100,
+        "wallMs": 7898.376958000008,
+        "imagesPerSecond": 12.660828994583914
+      },
+      {
+        "offset": 9600,
+        "count": 100,
+        "wallMs": 7895.29137500003,
+        "imagesPerSecond": 12.665777011934486
+      },
+      {
+        "offset": 9700,
+        "count": 100,
+        "wallMs": 7097.9217920000665,
+        "imagesPerSecond": 14.088630859910024
+      },
+      {
+        "offset": 9800,
+        "count": 100,
+        "wallMs": 7886.599916999927,
+        "imagesPerSecond": 12.679735380571978
+      },
+      {
+        "offset": 9900,
+        "count": 100,
+        "wallMs": 7202.036541000009,
+        "imagesPerSecond": 13.88496148703446
+      }
+    ],
+    "committedImages": 10000,
+    "firstImageReadyMs": 7983.263666999999,
+    "firstImageEditorOpenAndDecodeMs": 88.49366699999882,
+    "wallMs": 750950.904167,
+    "imagesPerSecond": 13.316449776557102,
+    "batchWorkMs": 750764.7148749996,
+    "batchWorkImagesPerSecond": 13.319752249764395
+  },
+  "resources": [
+    {
+      "label": "first-image-ready",
+      "elapsedMs": 18030.54975,
+      "galleryItems": 0,
+      "catalogResultItems": 100,
+      "htmlImages": 0,
+      "svgImages": 1,
+      "canvases": 0,
+      "annotationCanvases": 1,
+      "objectUrls": {
+        "active": 1,
+        "peak": 1,
+        "created": 1,
+        "revoked": 0
+      },
+      "storageEstimate": {
+        "quota": 10758869562,
+        "usage": 21451322,
+        "usageDetails": {
+          "fileSystem": 21451322
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 4,
+        "nodes": 3508,
+        "jsEventListeners": 2549
+      },
+      "mainRendererJsHeapUsedBytes": 11015000
+    },
+    {
+      "label": "intake-100",
+      "elapsedMs": 18071.124875,
+      "galleryItems": 100,
+      "catalogResultItems": 0,
+      "htmlImages": 0,
+      "svgImages": 0,
+      "canvases": 0,
+      "annotationCanvases": 0,
+      "objectUrls": {
+        "active": 0,
+        "peak": 1,
+        "created": 1,
+        "revoked": 1
+      },
+      "storageEstimate": {
+        "quota": 10758869562,
+        "usage": 21451322,
+        "usageDetails": {
+          "fileSystem": 21451322
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 4,
+        "nodes": 5718,
+        "jsEventListeners": 3003
+      },
+      "mainRendererJsHeapUsedBytes": 9974008
+    },
+    {
+      "label": "intake-1000",
+      "elapsedMs": 89110.585375,
+      "galleryItems": 100,
+      "catalogResultItems": 0,
+      "htmlImages": 0,
+      "svgImages": 0,
+      "canvases": 0,
+      "annotationCanvases": 0,
+      "objectUrls": {
+        "active": 0,
+        "peak": 1,
+        "created": 1,
+        "revoked": 1
+      },
+      "storageEstimate": {
+        "quota": 10894481350,
+        "usage": 157063110,
+        "usageDetails": {
+          "fileSystem": 157063110
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 4228,
+        "jsEventListeners": 2371
+      },
+      "mainRendererJsHeapUsedBytes": 13393136
+    },
+    {
+      "label": "intake-2000",
+      "elapsedMs": 163065.96524999998,
+      "galleryItems": 100,
+      "catalogResultItems": 0,
+      "htmlImages": 0,
+      "svgImages": 0,
+      "canvases": 0,
+      "annotationCanvases": 0,
+      "objectUrls": {
+        "active": 0,
+        "peak": 1,
+        "created": 1,
+        "revoked": 1
+      },
+      "storageEstimate": {
+        "quota": 11046093302,
+        "usage": 308675062,
+        "usageDetails": {
+          "fileSystem": 308675062
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 4229,
+        "jsEventListeners": 10109
+      },
+      "mainRendererJsHeapUsedBytes": 27763464
+    },
+    {
+      "label": "intake-3000",
+      "elapsedMs": 236353.786042,
+      "galleryItems": 100,
+      "catalogResultItems": 0,
+      "htmlImages": 0,
+      "svgImages": 0,
+      "canvases": 0,
+      "annotationCanvases": 0,
+      "objectUrls": {
+        "active": 0,
+        "peak": 1,
+        "created": 1,
+        "revoked": 1
+      },
+      "storageEstimate": {
+        "quota": 11199802406,
+        "usage": 462384166,
+        "usageDetails": {
+          "fileSystem": 462384166
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 4225,
+        "jsEventListeners": 4735
+      },
+      "mainRendererJsHeapUsedBytes": 22050872
+    },
+    {
+      "label": "intake-4000",
+      "elapsedMs": 308484.884542,
+      "galleryItems": 100,
+      "catalogResultItems": 0,
+      "htmlImages": 0,
+      "svgImages": 0,
+      "canvases": 0,
+      "annotationCanvases": 0,
+      "objectUrls": {
+        "active": 0,
+        "peak": 1,
+        "created": 1,
+        "revoked": 1
+      },
+      "storageEstimate": {
+        "quota": 11349317195,
+        "usage": 611898955,
+        "usageDetails": {
+          "fileSystem": 611898955
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 4229,
+        "jsEventListeners": 9035
+      },
+      "mainRendererJsHeapUsedBytes": 11225184
+    },
+    {
+      "label": "intake-5000",
+      "elapsedMs": 380050.50570800004,
+      "galleryItems": 100,
+      "catalogResultItems": 0,
+      "htmlImages": 0,
+      "svgImages": 0,
+      "canvases": 0,
+      "annotationCanvases": 0,
+      "objectUrls": {
+        "active": 0,
+        "peak": 1,
+        "created": 1,
+        "revoked": 1
+      },
+      "storageEstimate": {
+        "quota": 11498832163,
+        "usage": 761413923,
+        "usageDetails": {
+          "fileSystem": 761413923
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 4231,
+        "jsEventListeners": 10541
+      },
+      "mainRendererJsHeapUsedBytes": 31922372
+    },
+    {
+      "label": "intake-6000",
+      "elapsedMs": 452515.13670800003,
+      "galleryItems": 100,
+      "catalogResultItems": 0,
+      "htmlImages": 0,
+      "svgImages": 0,
+      "canvases": 0,
+      "annotationCanvases": 0,
+      "objectUrls": {
+        "active": 0,
+        "peak": 1,
+        "created": 1,
+        "revoked": 1
+      },
+      "storageEstimate": {
+        "quota": 11656735575,
+        "usage": 919317335,
+        "usageDetails": {
+          "fileSystem": 919317335
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 4225,
+        "jsEventListeners": 10325
+      },
+      "mainRendererJsHeapUsedBytes": 32752872
+    },
+    {
+      "label": "intake-7000",
+      "elapsedMs": 525919.359417,
+      "galleryItems": 100,
+      "catalogResultItems": 0,
+      "htmlImages": 0,
+      "svgImages": 0,
+      "canvases": 0,
+      "annotationCanvases": 0,
+      "objectUrls": {
+        "active": 0,
+        "peak": 1,
+        "created": 1,
+        "revoked": 1
+      },
+      "storageEstimate": {
+        "quota": 11806250374,
+        "usage": 1068832134,
+        "usageDetails": {
+          "fileSystem": 1068832134
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 4225,
+        "jsEventListeners": 6670
+      },
+      "mainRendererJsHeapUsedBytes": 19026664
+    },
+    {
+      "label": "intake-8000",
+      "elapsedMs": 602616.1301249999,
+      "galleryItems": 100,
+      "catalogResultItems": 0,
+      "htmlImages": 0,
+      "svgImages": 0,
+      "canvases": 0,
+      "annotationCanvases": 0,
+      "objectUrls": {
+        "active": 0,
+        "peak": 1,
+        "created": 1,
+        "revoked": 1
+      },
+      "storageEstimate": {
+        "quota": 11955765176,
+        "usage": 1218346936,
+        "usageDetails": {
+          "fileSystem": 1218346936
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 4225,
+        "jsEventListeners": 650
+      },
+      "mainRendererJsHeapUsedBytes": 14705104
+    },
+    {
+      "label": "intake-9000",
+      "elapsedMs": 682223.2352499999,
+      "galleryItems": 100,
+      "catalogResultItems": 0,
+      "htmlImages": 0,
+      "svgImages": 0,
+      "canvases": 0,
+      "annotationCanvases": 0,
+      "objectUrls": {
+        "active": 0,
+        "peak": 1,
+        "created": 1,
+        "revoked": 1
+      },
+      "storageEstimate": {
+        "quota": 12105279971,
+        "usage": 1367861731,
+        "usageDetails": {
+          "fileSystem": 1367861731
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 4225,
+        "jsEventListeners": 11615
+      },
+      "mainRendererJsHeapUsedBytes": 24825440
+    },
+    {
+      "label": "intake-10000",
+      "elapsedMs": 760994.001708,
+      "galleryItems": 100,
+      "catalogResultItems": 0,
+      "htmlImages": 0,
+      "svgImages": 0,
+      "canvases": 0,
+      "annotationCanvases": 0,
+      "objectUrls": {
+        "active": 0,
+        "peak": 1,
+        "created": 1,
+        "revoked": 1
+      },
+      "storageEstimate": {
+        "quota": 12254794780,
+        "usage": 1517376540,
+        "usageDetails": {
+          "fileSystem": 1517376540
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 4225,
+        "jsEventListeners": 10325
+      },
+      "mainRendererJsHeapUsedBytes": 25023184
+    },
+    {
+      "label": "navigation-1",
+      "elapsedMs": 767061.135917,
+      "galleryItems": 0,
+      "catalogResultItems": 100,
+      "htmlImages": 0,
+      "svgImages": 1,
+      "canvases": 0,
+      "annotationCanvases": 1,
+      "objectUrls": {
+        "active": 1,
+        "peak": 2,
+        "created": 3,
+        "revoked": 2
+      },
+      "storageEstimate": {
+        "quota": 12254794780,
+        "usage": 1517376540,
+        "usageDetails": {
+          "fileSystem": 1517376540
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 1954,
+        "jsEventListeners": 1008
+      },
+      "mainRendererJsHeapUsedBytes": 28298292
+    },
+    {
+      "label": "navigation-2",
+      "elapsedMs": 767124.030375,
+      "galleryItems": 0,
+      "catalogResultItems": 100,
+      "htmlImages": 0,
+      "svgImages": 1,
+      "canvases": 0,
+      "annotationCanvases": 1,
+      "objectUrls": {
+        "active": 1,
+        "peak": 2,
+        "created": 4,
+        "revoked": 3
+      },
+      "storageEstimate": {
+        "quota": 12254794780,
+        "usage": 1517376540,
+        "usageDetails": {
+          "fileSystem": 1517376540
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 2668,
+        "jsEventListeners": 1413
+      },
+      "mainRendererJsHeapUsedBytes": 10347264
+    },
+    {
+      "label": "navigation-3",
+      "elapsedMs": 767190.78775,
+      "galleryItems": 0,
+      "catalogResultItems": 100,
+      "htmlImages": 0,
+      "svgImages": 1,
+      "canvases": 0,
+      "annotationCanvases": 1,
+      "objectUrls": {
+        "active": 1,
+        "peak": 2,
+        "created": 5,
+        "revoked": 4
+      },
+      "storageEstimate": {
+        "quota": 12254794780,
+        "usage": 1517376540,
+        "usageDetails": {
+          "fileSystem": 1517376540
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 3396,
+        "jsEventListeners": 1818
+      },
+      "mainRendererJsHeapUsedBytes": 23339248
+    },
+    {
+      "label": "navigation-4",
+      "elapsedMs": 767256.347875,
+      "galleryItems": 0,
+      "catalogResultItems": 100,
+      "htmlImages": 0,
+      "svgImages": 1,
+      "canvases": 0,
+      "annotationCanvases": 1,
+      "objectUrls": {
+        "active": 1,
+        "peak": 2,
+        "created": 6,
+        "revoked": 5
+      },
+      "storageEstimate": {
+        "quota": 12254794780,
+        "usage": 1517376540,
+        "usageDetails": {
+          "fileSystem": 1517376540
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 4110,
+        "jsEventListeners": 2223
+      },
+      "mainRendererJsHeapUsedBytes": 34341560
+    },
+    {
+      "label": "navigation-5",
+      "elapsedMs": 767323.663667,
+      "galleryItems": 0,
+      "catalogResultItems": 100,
+      "htmlImages": 0,
+      "svgImages": 1,
+      "canvases": 0,
+      "annotationCanvases": 1,
+      "objectUrls": {
+        "active": 1,
+        "peak": 2,
+        "created": 7,
+        "revoked": 6
+      },
+      "storageEstimate": {
+        "quota": 12254794780,
+        "usage": 1517376540,
+        "usageDetails": {
+          "fileSystem": 1517376540
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 4838,
+        "jsEventListeners": 2628
+      },
+      "mainRendererJsHeapUsedBytes": 19899076
+    },
+    {
+      "label": "navigation-6",
+      "elapsedMs": 767389.7173329999,
+      "galleryItems": 0,
+      "catalogResultItems": 100,
+      "htmlImages": 0,
+      "svgImages": 1,
+      "canvases": 0,
+      "annotationCanvases": 1,
+      "objectUrls": {
+        "active": 1,
+        "peak": 2,
+        "created": 8,
+        "revoked": 7
+      },
+      "storageEstimate": {
+        "quota": 12254794780,
+        "usage": 1517376540,
+        "usageDetails": {
+          "fileSystem": 1517376540
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 5552,
+        "jsEventListeners": 3033
+      },
+      "mainRendererJsHeapUsedBytes": 30886112
+    },
+    {
+      "label": "navigation-7",
+      "elapsedMs": 767456.830458,
+      "galleryItems": 0,
+      "catalogResultItems": 100,
+      "htmlImages": 0,
+      "svgImages": 1,
+      "canvases": 0,
+      "annotationCanvases": 1,
+      "objectUrls": {
+        "active": 1,
+        "peak": 2,
+        "created": 9,
+        "revoked": 8
+      },
+      "storageEstimate": {
+        "quota": 12254794780,
+        "usage": 1517376540,
+        "usageDetails": {
+          "fileSystem": 1517376540
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 6280,
+        "jsEventListeners": 3438
+      },
+      "mainRendererJsHeapUsedBytes": 14334152
+    },
+    {
+      "label": "navigation-8",
+      "elapsedMs": 767523.7664579999,
+      "galleryItems": 0,
+      "catalogResultItems": 100,
+      "htmlImages": 0,
+      "svgImages": 1,
+      "canvases": 0,
+      "annotationCanvases": 1,
+      "objectUrls": {
+        "active": 1,
+        "peak": 2,
+        "created": 10,
+        "revoked": 9
+      },
+      "storageEstimate": {
+        "quota": 12254794780,
+        "usage": 1517376540,
+        "usageDetails": {
+          "fileSystem": 1517376540
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 6994,
+        "jsEventListeners": 3843
+      },
+      "mainRendererJsHeapUsedBytes": 25269872
+    },
+    {
+      "label": "navigation-9",
+      "elapsedMs": 767591.63775,
+      "galleryItems": 0,
+      "catalogResultItems": 100,
+      "htmlImages": 0,
+      "svgImages": 1,
+      "canvases": 0,
+      "annotationCanvases": 1,
+      "objectUrls": {
+        "active": 1,
+        "peak": 2,
+        "created": 11,
+        "revoked": 10
+      },
+      "storageEstimate": {
+        "quota": 12254794780,
+        "usage": 1517376540,
+        "usageDetails": {
+          "fileSystem": 1517376540
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 7722,
+        "jsEventListeners": 4248
+      },
+      "mainRendererJsHeapUsedBytes": 11366636
+    },
+    {
+      "label": "navigation-10",
+      "elapsedMs": 767657.0211669999,
+      "galleryItems": 0,
+      "catalogResultItems": 100,
+      "htmlImages": 0,
+      "svgImages": 1,
+      "canvases": 0,
+      "annotationCanvases": 1,
+      "objectUrls": {
+        "active": 1,
+        "peak": 2,
+        "created": 12,
+        "revoked": 11
+      },
+      "storageEstimate": {
+        "quota": 12254794780,
+        "usage": 1517376540,
+        "usageDetails": {
+          "fileSystem": 1517376540
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 8436,
+        "jsEventListeners": 4653
+      },
+      "mainRendererJsHeapUsedBytes": 22323532
+    },
+    {
+      "label": "navigation-11",
+      "elapsedMs": 767724.4679579999,
+      "galleryItems": 0,
+      "catalogResultItems": 100,
+      "htmlImages": 0,
+      "svgImages": 1,
+      "canvases": 0,
+      "annotationCanvases": 1,
+      "objectUrls": {
+        "active": 1,
+        "peak": 2,
+        "created": 13,
+        "revoked": 12
+      },
+      "storageEstimate": {
+        "quota": 12254794780,
+        "usage": 1517376540,
+        "usageDetails": {
+          "fileSystem": 1517376540
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 9164,
+        "jsEventListeners": 5058
+      },
+      "mainRendererJsHeapUsedBytes": 35259960
+    },
+    {
+      "label": "navigation-12",
+      "elapsedMs": 767791.017958,
+      "galleryItems": 0,
+      "catalogResultItems": 100,
+      "htmlImages": 0,
+      "svgImages": 1,
+      "canvases": 0,
+      "annotationCanvases": 1,
+      "objectUrls": {
+        "active": 1,
+        "peak": 2,
+        "created": 14,
+        "revoked": 13
+      },
+      "storageEstimate": {
+        "quota": 12254794780,
+        "usage": 1517376540,
+        "usageDetails": {
+          "fileSystem": 1517376540
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 9878,
+        "jsEventListeners": 5463
+      },
+      "mainRendererJsHeapUsedBytes": 19677632
+    },
+    {
+      "label": "navigation-13",
+      "elapsedMs": 767858.262458,
+      "galleryItems": 0,
+      "catalogResultItems": 100,
+      "htmlImages": 0,
+      "svgImages": 1,
+      "canvases": 0,
+      "annotationCanvases": 1,
+      "objectUrls": {
+        "active": 1,
+        "peak": 2,
+        "created": 15,
+        "revoked": 14
+      },
+      "storageEstimate": {
+        "quota": 12254794780,
+        "usage": 1517376540,
+        "usageDetails": {
+          "fileSystem": 1517376540
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 10606,
+        "jsEventListeners": 5868
+      },
+      "mainRendererJsHeapUsedBytes": 32630400
+    },
+    {
+      "label": "navigation-14",
+      "elapsedMs": 767924.6874579999,
+      "galleryItems": 0,
+      "catalogResultItems": 100,
+      "htmlImages": 0,
+      "svgImages": 1,
+      "canvases": 0,
+      "annotationCanvases": 1,
+      "objectUrls": {
+        "active": 1,
+        "peak": 2,
+        "created": 16,
+        "revoked": 15
+      },
+      "storageEstimate": {
+        "quota": 12254794780,
+        "usage": 1517376540,
+        "usageDetails": {
+          "fileSystem": 1517376540
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 11320,
+        "jsEventListeners": 6273
+      },
+      "mainRendererJsHeapUsedBytes": 15267332
+    },
+    {
+      "label": "navigation-15",
+      "elapsedMs": 767991.436458,
+      "galleryItems": 0,
+      "catalogResultItems": 100,
+      "htmlImages": 0,
+      "svgImages": 1,
+      "canvases": 0,
+      "annotationCanvases": 1,
+      "objectUrls": {
+        "active": 1,
+        "peak": 2,
+        "created": 17,
+        "revoked": 16
+      },
+      "storageEstimate": {
+        "quota": 12254794780,
+        "usage": 1517376540,
+        "usageDetails": {
+          "fileSystem": 1517376540
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 12048,
+        "jsEventListeners": 6678
+      },
+      "mainRendererJsHeapUsedBytes": 28215808
+    },
+    {
+      "label": "navigation-16",
+      "elapsedMs": 768058.9553329999,
+      "galleryItems": 0,
+      "catalogResultItems": 100,
+      "htmlImages": 0,
+      "svgImages": 1,
+      "canvases": 0,
+      "annotationCanvases": 1,
+      "objectUrls": {
+        "active": 1,
+        "peak": 2,
+        "created": 18,
+        "revoked": 17
+      },
+      "storageEstimate": {
+        "quota": 12254794780,
+        "usage": 1517376540,
+        "usageDetails": {
+          "fileSystem": 1517376540
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 12762,
+        "jsEventListeners": 7083
+      },
+      "mainRendererJsHeapUsedBytes": 12293912
+    },
+    {
+      "label": "navigation-17",
+      "elapsedMs": 768124.3670419999,
+      "galleryItems": 0,
+      "catalogResultItems": 100,
+      "htmlImages": 0,
+      "svgImages": 1,
+      "canvases": 0,
+      "annotationCanvases": 1,
+      "objectUrls": {
+        "active": 1,
+        "peak": 2,
+        "created": 19,
+        "revoked": 18
+      },
+      "storageEstimate": {
+        "quota": 12254794780,
+        "usage": 1517376540,
+        "usageDetails": {
+          "fileSystem": 1517376540
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 13490,
+        "jsEventListeners": 7488
+      },
+      "mainRendererJsHeapUsedBytes": 25253124
+    },
+    {
+      "label": "navigation-18",
+      "elapsedMs": 768190.812333,
+      "galleryItems": 0,
+      "catalogResultItems": 100,
+      "htmlImages": 0,
+      "svgImages": 1,
+      "canvases": 0,
+      "annotationCanvases": 1,
+      "objectUrls": {
+        "active": 1,
+        "peak": 2,
+        "created": 20,
+        "revoked": 19
+      },
+      "storageEstimate": {
+        "quota": 12254794780,
+        "usage": 1517376540,
+        "usageDetails": {
+          "fileSystem": 1517376540
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 14204,
+        "jsEventListeners": 7893
+      },
+      "mainRendererJsHeapUsedBytes": 36185236
+    },
+    {
+      "label": "navigation-19",
+      "elapsedMs": 768259.204542,
+      "galleryItems": 0,
+      "catalogResultItems": 100,
+      "htmlImages": 0,
+      "svgImages": 1,
+      "canvases": 0,
+      "annotationCanvases": 1,
+      "objectUrls": {
+        "active": 1,
+        "peak": 2,
+        "created": 21,
+        "revoked": 20
+      },
+      "storageEstimate": {
+        "quota": 12254794780,
+        "usage": 1517376540,
+        "usageDetails": {
+          "fileSystem": 1517376540
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 14932,
+        "jsEventListeners": 8298
+      },
+      "mainRendererJsHeapUsedBytes": 21781916
+    },
+    {
+      "label": "navigation-20",
+      "elapsedMs": 768325.2485,
+      "galleryItems": 0,
+      "catalogResultItems": 100,
+      "htmlImages": 0,
+      "svgImages": 1,
+      "canvases": 0,
+      "annotationCanvases": 1,
+      "objectUrls": {
+        "active": 1,
+        "peak": 2,
+        "created": 22,
+        "revoked": 21
+      },
+      "storageEstimate": {
+        "quota": 12254794780,
+        "usage": 1517376540,
+        "usageDetails": {
+          "fileSystem": 1517376540
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 15646,
+        "jsEventListeners": 8703
+      },
+      "mainRendererJsHeapUsedBytes": 32747464
+    },
+    {
+      "label": "navigation-21",
+      "elapsedMs": 768391.9720419999,
+      "galleryItems": 0,
+      "catalogResultItems": 100,
+      "htmlImages": 0,
+      "svgImages": 1,
+      "canvases": 0,
+      "annotationCanvases": 1,
+      "objectUrls": {
+        "active": 1,
+        "peak": 2,
+        "created": 23,
+        "revoked": 22
+      },
+      "storageEstimate": {
+        "quota": 12254794780,
+        "usage": 1517376540,
+        "usageDetails": {
+          "fileSystem": 1517376540
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 16374,
+        "jsEventListeners": 9108
+      },
+      "mainRendererJsHeapUsedBytes": 16171416
+    },
+    {
+      "label": "navigation-22",
+      "elapsedMs": 768459.1950419999,
+      "galleryItems": 0,
+      "catalogResultItems": 100,
+      "htmlImages": 0,
+      "svgImages": 1,
+      "canvases": 0,
+      "annotationCanvases": 1,
+      "objectUrls": {
+        "active": 1,
+        "peak": 2,
+        "created": 24,
+        "revoked": 23
+      },
+      "storageEstimate": {
+        "quota": 12254794780,
+        "usage": 1517376540,
+        "usageDetails": {
+          "fileSystem": 1517376540
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 17088,
+        "jsEventListeners": 9513
+      },
+      "mainRendererJsHeapUsedBytes": 27102708
+    },
+    {
+      "label": "navigation-23",
+      "elapsedMs": 768526.234083,
+      "galleryItems": 0,
+      "catalogResultItems": 100,
+      "htmlImages": 0,
+      "svgImages": 1,
+      "canvases": 0,
+      "annotationCanvases": 1,
+      "objectUrls": {
+        "active": 1,
+        "peak": 2,
+        "created": 25,
+        "revoked": 24
+      },
+      "storageEstimate": {
+        "quota": 12254794780,
+        "usage": 1517376540,
+        "usageDetails": {
+          "fileSystem": 1517376540
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 17816,
+        "jsEventListeners": 9918
+      },
+      "mainRendererJsHeapUsedBytes": 13222464
+    },
+    {
+      "label": "navigation-24",
+      "elapsedMs": 768590.839667,
+      "galleryItems": 0,
+      "catalogResultItems": 100,
+      "htmlImages": 0,
+      "svgImages": 1,
+      "canvases": 0,
+      "annotationCanvases": 1,
+      "objectUrls": {
+        "active": 1,
+        "peak": 2,
+        "created": 26,
+        "revoked": 25
+      },
+      "storageEstimate": {
+        "quota": 12254794780,
+        "usage": 1517376540,
+        "usageDetails": {
+          "fileSystem": 1517376540
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 18530,
+        "jsEventListeners": 10323
+      },
+      "mainRendererJsHeapUsedBytes": 24207924
+    },
+    {
+      "label": "navigation-25",
+      "elapsedMs": 768659.4251669999,
+      "galleryItems": 0,
+      "catalogResultItems": 100,
+      "htmlImages": 0,
+      "svgImages": 1,
+      "canvases": 0,
+      "annotationCanvases": 1,
+      "objectUrls": {
+        "active": 1,
+        "peak": 2,
+        "created": 27,
+        "revoked": 26
+      },
+      "storageEstimate": {
+        "quota": 12254794780,
+        "usage": 1517376540,
+        "usageDetails": {
+          "fileSystem": 1517376540
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 19258,
+        "jsEventListeners": 10728
+      },
+      "mainRendererJsHeapUsedBytes": 37191500
+    },
+    {
+      "label": "navigation-26",
+      "elapsedMs": 768724.88175,
+      "galleryItems": 0,
+      "catalogResultItems": 100,
+      "htmlImages": 0,
+      "svgImages": 1,
+      "canvases": 0,
+      "annotationCanvases": 1,
+      "objectUrls": {
+        "active": 1,
+        "peak": 2,
+        "created": 28,
+        "revoked": 27
+      },
+      "storageEstimate": {
+        "quota": 12254794780,
+        "usage": 1517376540,
+        "usageDetails": {
+          "fileSystem": 1517376540
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 19972,
+        "jsEventListeners": 11133
+      },
+      "mainRendererJsHeapUsedBytes": 21494084
+    },
+    {
+      "label": "navigation-27",
+      "elapsedMs": 768793.4992079999,
+      "galleryItems": 0,
+      "catalogResultItems": 100,
+      "htmlImages": 0,
+      "svgImages": 1,
+      "canvases": 0,
+      "annotationCanvases": 1,
+      "objectUrls": {
+        "active": 1,
+        "peak": 2,
+        "created": 29,
+        "revoked": 28
+      },
+      "storageEstimate": {
+        "quota": 12254794780,
+        "usage": 1517376540,
+        "usageDetails": {
+          "fileSystem": 1517376540
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 20700,
+        "jsEventListeners": 11538
+      },
+      "mainRendererJsHeapUsedBytes": 34442536
+    },
+    {
+      "label": "navigation-28",
+      "elapsedMs": 768858.704792,
+      "galleryItems": 0,
+      "catalogResultItems": 100,
+      "htmlImages": 0,
+      "svgImages": 1,
+      "canvases": 0,
+      "annotationCanvases": 1,
+      "objectUrls": {
+        "active": 1,
+        "peak": 2,
+        "created": 30,
+        "revoked": 29
+      },
+      "storageEstimate": {
+        "quota": 12254794780,
+        "usage": 1517376540,
+        "usageDetails": {
+          "fileSystem": 1517376540
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 21414,
+        "jsEventListeners": 11943
+      },
+      "mainRendererJsHeapUsedBytes": 17171484
+    },
+    {
+      "label": "navigation-29",
+      "elapsedMs": 768926.608167,
+      "galleryItems": 0,
+      "catalogResultItems": 100,
+      "htmlImages": 0,
+      "svgImages": 1,
+      "canvases": 0,
+      "annotationCanvases": 1,
+      "objectUrls": {
+        "active": 1,
+        "peak": 2,
+        "created": 31,
+        "revoked": 30
+      },
+      "storageEstimate": {
+        "quota": 12254794780,
+        "usage": 1517376540,
+        "usageDetails": {
+          "fileSystem": 1517376540
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 22142,
+        "jsEventListeners": 12348
+      },
+      "mainRendererJsHeapUsedBytes": 30108644
+    },
+    {
+      "label": "navigation-30",
+      "elapsedMs": 768992.191125,
+      "galleryItems": 0,
+      "catalogResultItems": 100,
+      "htmlImages": 0,
+      "svgImages": 1,
+      "canvases": 0,
+      "annotationCanvases": 1,
+      "objectUrls": {
+        "active": 1,
+        "peak": 2,
+        "created": 32,
+        "revoked": 31
+      },
+      "storageEstimate": {
+        "quota": 12254794780,
+        "usage": 1517376540,
+        "usageDetails": {
+          "fileSystem": 1517376540
+        }
+      },
+      "liveWorkers": 2,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 22856,
+        "jsEventListeners": 12753
+      },
+      "mainRendererJsHeapUsedBytes": 14068864
+    },
+    {
+      "label": "reloaded-last-image",
+      "elapsedMs": 770237.005458,
+      "galleryItems": 0,
+      "catalogResultItems": 1,
+      "htmlImages": 0,
+      "svgImages": 1,
+      "canvases": 0,
+      "annotationCanvases": 1,
+      "objectUrls": {
+        "active": 1,
+        "peak": 1,
+        "created": 1,
+        "revoked": 0
+      },
+      "storageEstimate": {
+        "quota": 12252357660,
+        "usage": 1514939420,
+        "usageDetails": {
+          "fileSystem": 1514939420
+        }
+      },
+      "liveWorkers": 1,
+      "mainRendererDom": {
+        "documents": 1,
+        "nodes": 934,
+        "jsEventListeners": 1846
+      },
+      "mainRendererJsHeapUsedBytes": 15414436
+    }
+  ],
+  "edits": [
+    {
+      "inputAt": 751862.8999999911,
+      "expectedLabel": true,
+      "ok": true,
+      "requestToAckMs": 14.099999994039536,
+      "inputToAckMs": 14.900000005960464,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 48.6000000089407
+    },
+    {
+      "inputAt": 751996.3999999911,
+      "expectedLabel": false,
+      "ok": true,
+      "requestToAckMs": 15.600000008940697,
+      "inputToAckMs": 15.800000011920929,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 47.5
+    },
+    {
+      "inputAt": 752111.700000003,
+      "expectedLabel": true,
+      "ok": true,
+      "requestToAckMs": 17,
+      "inputToAckMs": 17.19999998807907,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 49.79999999701977
+    },
+    {
+      "inputAt": 752229.200000003,
+      "expectedLabel": false,
+      "ok": true,
+      "requestToAckMs": 16.299999997019768,
+      "inputToAckMs": 16.399999991059303,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 48.8999999910593
+    },
+    {
+      "inputAt": 752345.599999994,
+      "expectedLabel": true,
+      "ok": true,
+      "requestToAckMs": 16.200000002980232,
+      "inputToAckMs": 16.400000005960464,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 48.29999999701977
+    },
+    {
+      "inputAt": 752461.5,
+      "expectedLabel": false,
+      "ok": true,
+      "requestToAckMs": 16.5,
+      "inputToAckMs": 16.5,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 49.8999999910593
+    },
+    {
+      "inputAt": 752578.799999997,
+      "expectedLabel": true,
+      "ok": true,
+      "requestToAckMs": 16.399999991059303,
+      "inputToAckMs": 16.599999994039536,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 49.29999999701977
+    },
+    {
+      "inputAt": 752695.700000003,
+      "expectedLabel": false,
+      "ok": true,
+      "requestToAckMs": 16.200000002980232,
+      "inputToAckMs": 16.399999991059303,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 49.099999994039536
+    },
+    {
+      "inputAt": 752812.200000003,
+      "expectedLabel": true,
+      "ok": true,
+      "requestToAckMs": 15.400000005960464,
+      "inputToAckMs": 15.599999994039536,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 48.5
+    },
+    {
+      "inputAt": 752928.200000003,
+      "expectedLabel": false,
+      "ok": true,
+      "requestToAckMs": 16.200000002980232,
+      "inputToAckMs": 16.299999997019768,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 49.3999999910593
+    },
+    {
+      "inputAt": 753044.799999997,
+      "expectedLabel": true,
+      "ok": true,
+      "requestToAckMs": 16.399999991059303,
+      "inputToAckMs": 16.599999994039536,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 50
+    },
+    {
+      "inputAt": 753162.3999999911,
+      "expectedLabel": false,
+      "ok": true,
+      "requestToAckMs": 16.200000002980232,
+      "inputToAckMs": 16.30000001192093,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 49.1000000089407
+    },
+    {
+      "inputAt": 753278.700000003,
+      "expectedLabel": true,
+      "ok": true,
+      "requestToAckMs": 16.5,
+      "inputToAckMs": 16.69999998807907,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 49.29999999701977
+    },
+    {
+      "inputAt": 753395.700000003,
+      "expectedLabel": false,
+      "ok": true,
+      "requestToAckMs": 15.800000011920929,
+      "inputToAckMs": 16,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 49.099999994039536
+    },
+    {
+      "inputAt": 753512.099999994,
+      "expectedLabel": true,
+      "ok": true,
+      "requestToAckMs": 16.5,
+      "inputToAckMs": 16.600000008940697,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 49
+    },
+    {
+      "inputAt": 753628.599999994,
+      "expectedLabel": false,
+      "ok": true,
+      "requestToAckMs": 16.099999994039536,
+      "inputToAckMs": 16.200000002980232,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 49.5
+    },
+    {
+      "inputAt": 753745.3999999911,
+      "expectedLabel": true,
+      "ok": true,
+      "requestToAckMs": 16.400000005960464,
+      "inputToAckMs": 16.600000008940697,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 49.30000001192093
+    },
+    {
+      "inputAt": 753861.599999994,
+      "expectedLabel": false,
+      "ok": true,
+      "requestToAckMs": 17.099999994039536,
+      "inputToAckMs": 17.200000002980232,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 49.20000000298023
+    },
+    {
+      "inputAt": 753978.599999994,
+      "expectedLabel": true,
+      "ok": true,
+      "requestToAckMs": 16.5,
+      "inputToAckMs": 16.600000008940697,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 49.20000000298023
+    },
+    {
+      "inputAt": 754095.3999999911,
+      "expectedLabel": false,
+      "ok": true,
+      "requestToAckMs": 16.400000005960464,
+      "inputToAckMs": 16.600000008940697,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 49.30000001192093
+    },
+    {
+      "inputAt": 754212.200000003,
+      "expectedLabel": true,
+      "ok": true,
+      "requestToAckMs": 16.299999997019768,
+      "inputToAckMs": 16.399999991059303,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 49
+    },
+    {
+      "inputAt": 754328.700000003,
+      "expectedLabel": false,
+      "ok": true,
+      "requestToAckMs": 16.400000005960464,
+      "inputToAckMs": 16.599999994039536,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 49.29999999701977
+    },
+    {
+      "inputAt": 754444.8999999911,
+      "expectedLabel": true,
+      "ok": true,
+      "requestToAckMs": 17.099999994039536,
+      "inputToAckMs": 17.200000002980232,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 49.70000000298023
+    },
+    {
+      "inputAt": 754561.8999999911,
+      "expectedLabel": false,
+      "ok": true,
+      "requestToAckMs": 16.399999991059303,
+      "inputToAckMs": 16.5,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 49.5
+    },
+    {
+      "inputAt": 754678.3999999911,
+      "expectedLabel": true,
+      "ok": true,
+      "requestToAckMs": 16.799999997019768,
+      "inputToAckMs": 17,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 49.6000000089407
+    },
+    {
+      "inputAt": 754795.700000003,
+      "expectedLabel": false,
+      "ok": true,
+      "requestToAckMs": 15.700000002980232,
+      "inputToAckMs": 15.799999997019768,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 48.599999994039536
+    },
+    {
+      "inputAt": 754911.799999997,
+      "expectedLabel": true,
+      "ok": true,
+      "requestToAckMs": 16.80000001192093,
+      "inputToAckMs": 16.900000005960464,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 49.599999994039536
+    },
+    {
+      "inputAt": 755028.599999994,
+      "expectedLabel": false,
+      "ok": true,
+      "requestToAckMs": 16.799999997019768,
+      "inputToAckMs": 16.900000005960464,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 49.400000005960464
+    },
+    {
+      "inputAt": 755145.5,
+      "expectedLabel": true,
+      "ok": true,
+      "requestToAckMs": 16.5,
+      "inputToAckMs": 16.599999994039536,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 48.79999999701977
+    },
+    {
+      "inputAt": 755262.200000003,
+      "expectedLabel": false,
+      "ok": true,
+      "requestToAckMs": 16.400000005960464,
+      "inputToAckMs": 16.5,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 48.5
+    },
+    {
+      "inputAt": 755378.3999999911,
+      "expectedLabel": true,
+      "ok": true,
+      "requestToAckMs": 16.600000008940697,
+      "inputToAckMs": 16.80000001192093,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 48.6000000089407
+    },
+    {
+      "inputAt": 755494.799999997,
+      "expectedLabel": false,
+      "ok": true,
+      "requestToAckMs": 17.100000008940697,
+      "inputToAckMs": 17.200000002980232,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 49.79999999701977
+    },
+    {
+      "inputAt": 755612.599999994,
+      "expectedLabel": true,
+      "ok": true,
+      "requestToAckMs": 15,
+      "inputToAckMs": 15.200000002980232,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 48.1000000089407
+    },
+    {
+      "inputAt": 755729.200000003,
+      "expectedLabel": false,
+      "ok": true,
+      "requestToAckMs": 16,
+      "inputToAckMs": 16.19999998807907,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 48.5
+    },
+    {
+      "inputAt": 755845.099999994,
+      "expectedLabel": true,
+      "ok": true,
+      "requestToAckMs": 16.200000002980232,
+      "inputToAckMs": 16.400000005960464,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 48.70000000298023
+    },
+    {
+      "inputAt": 755961.5,
+      "expectedLabel": false,
+      "ok": true,
+      "requestToAckMs": 17,
+      "inputToAckMs": 17.099999994039536,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 49.099999994039536
+    },
+    {
+      "inputAt": 756078.799999997,
+      "expectedLabel": true,
+      "ok": true,
+      "requestToAckMs": 15.600000008940697,
+      "inputToAckMs": 15.700000002980232,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 49.20000000298023
+    },
+    {
+      "inputAt": 756195.700000003,
+      "expectedLabel": false,
+      "ok": true,
+      "requestToAckMs": 15.600000008940697,
+      "inputToAckMs": 15.799999997019768,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 48.8999999910593
+    },
+    {
+      "inputAt": 756311.700000003,
+      "expectedLabel": true,
+      "ok": true,
+      "requestToAckMs": 16.900000005960464,
+      "inputToAckMs": 17,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 49
+    },
+    {
+      "inputAt": 756428.5,
+      "expectedLabel": false,
+      "ok": true,
+      "requestToAckMs": 16.299999997019768,
+      "inputToAckMs": 16.399999991059303,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 49.5
+    },
+    {
+      "inputAt": 756545.5,
+      "expectedLabel": true,
+      "ok": true,
+      "requestToAckMs": 15.799999997019768,
+      "inputToAckMs": 16,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 48.099999994039536
+    },
+    {
+      "inputAt": 756661.599999994,
+      "expectedLabel": false,
+      "ok": true,
+      "requestToAckMs": 17.19999998807907,
+      "inputToAckMs": 17.299999997019768,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 49.5
+    },
+    {
+      "inputAt": 756778.299999997,
+      "expectedLabel": true,
+      "ok": true,
+      "requestToAckMs": 16.100000008940697,
+      "inputToAckMs": 16.200000002980232,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 49.29999999701977
+    },
+    {
+      "inputAt": 756894.8999999911,
+      "expectedLabel": false,
+      "ok": true,
+      "requestToAckMs": 17,
+      "inputToAckMs": 17.100000008940697,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 49.400000005960464
+    },
+    {
+      "inputAt": 757012.200000003,
+      "expectedLabel": true,
+      "ok": true,
+      "requestToAckMs": 16.099999994039536,
+      "inputToAckMs": 16.19999998807907,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 48.19999998807907
+    },
+    {
+      "inputAt": 757128.3999999911,
+      "expectedLabel": false,
+      "ok": true,
+      "requestToAckMs": 16.799999997019768,
+      "inputToAckMs": 16.900000005960464,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 49.6000000089407
+    },
+    {
+      "inputAt": 757245.099999994,
+      "expectedLabel": true,
+      "ok": true,
+      "requestToAckMs": 16.200000002980232,
+      "inputToAckMs": 16.400000005960464,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 49.29999999701977
+    },
+    {
+      "inputAt": 757361.8999999911,
+      "expectedLabel": false,
+      "ok": true,
+      "requestToAckMs": 15.899999991059303,
+      "inputToAckMs": 16,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 49.400000005960464
+    },
+    {
+      "inputAt": 757478.700000003,
+      "expectedLabel": true,
+      "ok": true,
+      "requestToAckMs": 16.200000002980232,
+      "inputToAckMs": 16.399999991059303,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 48.599999994039536
+    },
+    {
+      "inputAt": 757595,
+      "expectedLabel": false,
+      "ok": true,
+      "requestToAckMs": 16.700000002980232,
+      "inputToAckMs": 17,
+      "renderScheduled": true,
+      "inputToRenderOpportunityMs": 49.29999999701977
+    }
+  ],
+  "errors": [],
+  "network": {
+    "requests": 16,
+    "blockedExternal": []
+  },
+  "limitations": [
+    "Synthetic, highly compressible bands only; not representative of photographs, high entropy, quota exhaustion, or all browsers.",
+    "Batched UI intake includes file selection, automation, sanitization, encrypted persistence, and catalog rendering; not a single 10000-file picker operation.",
+    "First-image readiness is the first decoded editor image after the first batch, not readiness while intake is running.",
+    "Input-render is trusted click to two animation frames after the label DOM mutation: a presentation opportunity proxy, not hardware input-to-photon or continuous pointer-drag latency.",
+    "Commit acknowledgement is observed at the worker protocol boundary, not fsync/power-loss durability; input-to-ack also includes UI scheduling.",
+    "JS heap and DOM counters cover the main renderer only. Worker/WASM, decoded bitmaps, GPU, browser process, and total process memory are not measured. The 768 MiB total-memory gate cannot be certified.",
+    "Object URL accounting covers the main window only; live worker count is not worker memory. Catalog count is validated through successful intake acknowledgements and end-of-catalog search, not an internal memory census.",
+    "Resource snapshots are sampled, not continuous peak-memory measurements. Instrumentation and automation add overhead. Timing gate results describe this run only."
+  ],
+  "fixture": {
+    "generator": "synthetic-bands-v1",
+    "width": 2048,
+    "height": 1536,
+    "count": 10000,
+    "totalEncodedBytes": 1098674425,
+    "pool": [
+      {
+        "seed": 1,
+        "name": "synthetic-00000.png",
+        "bytes": 109868,
+        "sha256": "1d8d2a8a72bc6aaa5b2421ac81ace741bfe6d7d384558eaf5379681c73ee62a3"
+      },
+      {
+        "seed": 2,
+        "name": "synthetic-00001.png",
+        "bytes": 109850,
+        "sha256": "4fd9c7606446efa782298b552e206e663ed1200fb8360ce8f9095c489e3e2c7a"
+      },
+      {
+        "seed": 3,
+        "name": "synthetic-00002.png",
+        "bytes": 109867,
+        "sha256": "9416763a84186896d06269f38eaf6ef840633f8507f664dd32a9b30a81454a42"
+      },
+      {
+        "seed": 4,
+        "name": "synthetic-00003.png",
+        "bytes": 109871,
+        "sha256": "8932308fafc599efb1dfafb4a8c92ad62b402bf416e6ffb4096decabc3a178d6"
+      },
+      {
+        "seed": 5,
+        "name": "synthetic-00004.png",
+        "bytes": 109861,
+        "sha256": "45a63ff736f268866e68bf27d61e208361458a452c3e81096f3144e7d80b7354"
+      },
+      {
+        "seed": 6,
+        "name": "synthetic-00005.png",
+        "bytes": 109888,
+        "sha256": "b1cade037a8ba4fa888a0b36c78b24f7aec0ca36b5966da8859ce0c81f02d2e6"
+      },
+      {
+        "seed": 7,
+        "name": "synthetic-00006.png",
+        "bytes": 109845,
+        "sha256": "618f08fe756d521f888c16649e16261c243d12f5ea60f44230f884d905c1dd9f"
+      },
+      {
+        "seed": 8,
+        "name": "synthetic-00007.png",
+        "bytes": 109883,
+        "sha256": "5a7b4aa4b14d0fcf831718a9d9329f3a00292f8a341c6c31ba94583434ce685e"
+      },
+      {
+        "seed": 9,
+        "name": "synthetic-00008.png",
+        "bytes": 109900,
+        "sha256": "5c4a8c3837fb3969f4f7a142761dfb16c92b48a6ee81ed2febcaf1b80d6428f7"
+      },
+      {
+        "seed": 10,
+        "name": "synthetic-00009.png",
+        "bytes": 109881,
+        "sha256": "cd9c831b02ca3c4f67f02840b0514b79010bf30c3e8aa5735a0f0b0b6fde9aa8"
+      },
+      {
+        "seed": 11,
+        "name": "synthetic-00010.png",
+        "bytes": 109873,
+        "sha256": "149964233975b9c711e9f3119087d723856b307705d985d05e8e687a78b5c1fb"
+      },
+      {
+        "seed": 12,
+        "name": "synthetic-00011.png",
+        "bytes": 109872,
+        "sha256": "80c291a32e05f3e0f97599efeea31aaaaaa77a50f1c06b8ddbeb0f999c4def8b"
+      },
+      {
+        "seed": 13,
+        "name": "synthetic-00012.png",
+        "bytes": 109869,
+        "sha256": "0946a6a7114290b57aae32ea0a089d21d591d9194e48be4d67c8eed9037fe31f"
+      },
+      {
+        "seed": 14,
+        "name": "synthetic-00013.png",
+        "bytes": 109872,
+        "sha256": "6a5ab683ff7d693e31ce5c2d258f50221d1cc7b76b571840b80de1d96e9a1f56"
+      },
+      {
+        "seed": 15,
+        "name": "synthetic-00014.png",
+        "bytes": 109863,
+        "sha256": "467d0d3f772b631e61a361c2f04d014941d11a6cd3d7a412b5639087f033501a"
+      },
+      {
+        "seed": 16,
+        "name": "synthetic-00015.png",
+        "bytes": 109866,
+        "sha256": "148c36db7be1f5f9f95f93e5f494a2125dd62f96c8bbb9f20dd5e05d612042f4"
+      },
+      {
+        "seed": 17,
+        "name": "synthetic-00016.png",
+        "bytes": 109866,
+        "sha256": "22b5356a88b2df8105f3baec92cac599be7640149c19a6509dbff125f0079504"
+      },
+      {
+        "seed": 18,
+        "name": "synthetic-00017.png",
+        "bytes": 109902,
+        "sha256": "4fb239d468a186eec6d6a977280f98c5d48cf12021eedcdffd93fbc3625003f9"
+      },
+      {
+        "seed": 19,
+        "name": "synthetic-00018.png",
+        "bytes": 109863,
+        "sha256": "ae587ae57b6ca0bdfc529576ea039e5bb54eabe971abd69508c713ae7a78b7df"
+      },
+      {
+        "seed": 20,
+        "name": "synthetic-00019.png",
+        "bytes": 109858,
+        "sha256": "6e0f2e5281996ad1f05d47d87b9ca0863535b978fdb4c6b9d9670f8d12ca0270"
+      },
+      {
+        "seed": 21,
+        "name": "synthetic-00020.png",
+        "bytes": 109862,
+        "sha256": "60f7018214b2a28e76631f2e1e07fd08cc90e9932cfed46ea0f4798e9fdf12b4"
+      },
+      {
+        "seed": 22,
+        "name": "synthetic-00021.png",
+        "bytes": 109871,
+        "sha256": "2fa1d76eb4eb5bcbda60cfb1ed85e2c3b6e90c00b128f78953e4187ed69a9b9b"
+      },
+      {
+        "seed": 23,
+        "name": "synthetic-00022.png",
+        "bytes": 109866,
+        "sha256": "fca64c1e24c3ebbd05966fed25e3beaf4982d9442ee342eeca3a516f4358bf81"
+      },
+      {
+        "seed": 24,
+        "name": "synthetic-00023.png",
+        "bytes": 109862,
+        "sha256": "805dc8b40ef40f2269b8f53b9afc1fee900b7bc72bd907e7e908ec78f4c7ccb6"
+      },
+      {
+        "seed": 25,
+        "name": "synthetic-00024.png",
+        "bytes": 109872,
+        "sha256": "0bde02d5f5db18ee539d3e1954d13e5c5c3efe8f49af2c4e28ee4d3a2b19207a"
+      },
+      {
+        "seed": 26,
+        "name": "synthetic-00025.png",
+        "bytes": 109867,
+        "sha256": "d0123d49d90663b724c65d1c1dcf79692ba56be2c8f0a7b9736e8550adb870f4"
+      },
+      {
+        "seed": 27,
+        "name": "synthetic-00026.png",
+        "bytes": 109839,
+        "sha256": "e783c50103f86d62c783c92587a235964b1078f94f738be4adaa0f8f8dc4fb99"
+      },
+      {
+        "seed": 28,
+        "name": "synthetic-00027.png",
+        "bytes": 109873,
+        "sha256": "838aae3fc2e297ac7536cb01d328179b0cd71615ae67b9b7380d5317d95d86d7"
+      },
+      {
+        "seed": 29,
+        "name": "synthetic-00028.png",
+        "bytes": 109871,
+        "sha256": "bc6a03b0992d1ab9f5960d6a96287d26ffd236211ad8931f8b444f4826256531"
+      },
+      {
+        "seed": 30,
+        "name": "synthetic-00029.png",
+        "bytes": 109865,
+        "sha256": "bfdf975eb7437e745fc07e587931a42e851f8748a58701e73a3c222bd152f258"
+      },
+      {
+        "seed": 31,
+        "name": "synthetic-00030.png",
+        "bytes": 109861,
+        "sha256": "20bea69857f032b4f73bc8adb31f8fb2a06d684b38370022579b296d9d92c334"
+      },
+      {
+        "seed": 32,
+        "name": "synthetic-00031.png",
+        "bytes": 109864,
+        "sha256": "bb22ad1fc0d5c20f9dfcaf4cf3e698a81ee768fa7cdcabd0a828dc0d7e992075"
+      },
+      {
+        "seed": 33,
+        "name": "synthetic-00032.png",
+        "bytes": 109880,
+        "sha256": "53e11f0ebf1f3c6ae5c295f59962f3ffe12911f250f0d0df2102d32ad0a3ce91"
+      },
+      {
+        "seed": 34,
+        "name": "synthetic-00033.png",
+        "bytes": 109843,
+        "sha256": "279e92664d50c5f097059ae3aff2097112eef5c575878041a85e44d53a2638e1"
+      },
+      {
+        "seed": 35,
+        "name": "synthetic-00034.png",
+        "bytes": 109877,
+        "sha256": "8535f1222d649926ab1cefeddc4649171675eecae8b59649e868ab193963238e"
+      },
+      {
+        "seed": 36,
+        "name": "synthetic-00035.png",
+        "bytes": 109860,
+        "sha256": "b83b47874e03bc85d2bd12c867ee1d75ec4407957b1669ebf9f72daeb80caf61"
+      },
+      {
+        "seed": 37,
+        "name": "synthetic-00036.png",
+        "bytes": 109885,
+        "sha256": "a26c48c3756e812ff46ad266de9f6a9a1b2af130ff540b383bc64d30ffb5631f"
+      },
+      {
+        "seed": 38,
+        "name": "synthetic-00037.png",
+        "bytes": 109842,
+        "sha256": "ad8898e7afcf5c327fdefb54e1a0c55b17db0b793ff8242b61c4bb6ab060ac5c"
+      },
+      {
+        "seed": 39,
+        "name": "synthetic-00038.png",
+        "bytes": 109868,
+        "sha256": "2901c8b9c5bb0a67b824303b83a066fe6af085278f4fabbbc16f0edf4d42f0d2"
+      },
+      {
+        "seed": 40,
+        "name": "synthetic-00039.png",
+        "bytes": 109870,
+        "sha256": "56b35a2e0aa34cf9b5f0d9149d7ea955d082d3b87e4a05527d30d01938ac3447"
+      },
+      {
+        "seed": 41,
+        "name": "synthetic-00040.png",
+        "bytes": 109878,
+        "sha256": "67398c8b7b7eb049e094dfddca14767ed3e65278ce8bb322745abe67436b2697"
+      },
+      {
+        "seed": 42,
+        "name": "synthetic-00041.png",
+        "bytes": 109879,
+        "sha256": "1d6f4a601f1842b8d305a41d245abb1eea89644d8e5a898a39b3e7ba3fa62c24"
+      },
+      {
+        "seed": 43,
+        "name": "synthetic-00042.png",
+        "bytes": 109874,
+        "sha256": "85dc2e1375155c78e9df9960a8c68be7894fef7ade076fb0d42ea22325412707"
+      },
+      {
+        "seed": 44,
+        "name": "synthetic-00043.png",
+        "bytes": 109877,
+        "sha256": "7114f2ce3287193a9fa05cfeea1b896e50e3c1f2db21becee06bf3f24bf11222"
+      },
+      {
+        "seed": 45,
+        "name": "synthetic-00044.png",
+        "bytes": 109855,
+        "sha256": "10d70f6fdf80eb337c79f3913cf4e42493f23e9e228b3946dd2b4c90a318e1a9"
+      },
+      {
+        "seed": 46,
+        "name": "synthetic-00045.png",
+        "bytes": 109871,
+        "sha256": "621ef03346820ed6e2e6ab8dcc70bd472b74440fe132ecd0a653e99644a3cbad"
+      },
+      {
+        "seed": 47,
+        "name": "synthetic-00046.png",
+        "bytes": 109876,
+        "sha256": "6d229151825d14e853057baeea4a20878706df1c401166956d92ea035e2686cc"
+      },
+      {
+        "seed": 48,
+        "name": "synthetic-00047.png",
+        "bytes": 109868,
+        "sha256": "8e9c532f9afac4aaeedd9c3e2e200e5a39e02aba23ab8a40d03983c5cdb22284"
+      },
+      {
+        "seed": 49,
+        "name": "synthetic-00048.png",
+        "bytes": 109883,
+        "sha256": "5cd927de139fa962a47f9210a7f7469daf0422b505c199d47e367fdaa6321f05"
+      },
+      {
+        "seed": 50,
+        "name": "synthetic-00049.png",
+        "bytes": 109860,
+        "sha256": "80d4d2b1d639ca0b1be61f35766cee8f56103517d5dcd9d6b9c1604b40dbcad9"
+      },
+      {
+        "seed": 51,
+        "name": "synthetic-00050.png",
+        "bytes": 109857,
+        "sha256": "eaf82e54972a58e3df4dee10004e96047c1825f2dd44182571ae6929a3b4e450"
+      },
+      {
+        "seed": 52,
+        "name": "synthetic-00051.png",
+        "bytes": 109846,
+        "sha256": "c1b75482846ad7ea25122e169796682e9f0d647a8f28f48baf87922dd87a313d"
+      },
+      {
+        "seed": 53,
+        "name": "synthetic-00052.png",
+        "bytes": 109866,
+        "sha256": "110a04be5b322b4b0cf62325da766698de4cc766a978d2c5fd3dad156c4e706a"
+      },
+      {
+        "seed": 54,
+        "name": "synthetic-00053.png",
+        "bytes": 109866,
+        "sha256": "2812c0bf9eb81ecc47609841504ca45fbe17a270c94e3fd83ea38160905a5eaa"
+      },
+      {
+        "seed": 55,
+        "name": "synthetic-00054.png",
+        "bytes": 109875,
+        "sha256": "8672f35c85a6624eb16c0e712f6d99a0ad423eb58eb3e8b2e6665940f417ed28"
+      },
+      {
+        "seed": 56,
+        "name": "synthetic-00055.png",
+        "bytes": 109875,
+        "sha256": "9bba5a687f52004c8a6468f650f56e0f29fd1e0bb9f35a91f8e759b21826504a"
+      },
+      {
+        "seed": 57,
+        "name": "synthetic-00056.png",
+        "bytes": 109873,
+        "sha256": "9b0d13b61de20ffd3377371049f037b5c59bd131d522e442cbaee5acaa8db692"
+      },
+      {
+        "seed": 58,
+        "name": "synthetic-00057.png",
+        "bytes": 109861,
+        "sha256": "22f23af4a168641c01a6a5a3a53c6128e3209cd64051f29355ab23c57ed8ccb7"
+      },
+      {
+        "seed": 59,
+        "name": "synthetic-00058.png",
+        "bytes": 109871,
+        "sha256": "02f29b3685c25f2b1ad910f44c12c52dd4df47a545df33765a1c1393c0b6327d"
+      },
+      {
+        "seed": 60,
+        "name": "synthetic-00059.png",
+        "bytes": 109871,
+        "sha256": "eea6ce40bdeb55b68cdcb5798f9733e04360bc0523f8cf6e995f93cd4826df9a"
+      },
+      {
+        "seed": 61,
+        "name": "synthetic-00060.png",
+        "bytes": 109860,
+        "sha256": "436759702b3c1b40f768ab6ce500ecd9e84a39d30e46907c64dd233a7b85451d"
+      },
+      {
+        "seed": 62,
+        "name": "synthetic-00061.png",
+        "bytes": 109865,
+        "sha256": "456415f4201fd5e1d3ae5b678e9587e53f5d8fd65799dfecb12ac9a523fc6e25"
+      },
+      {
+        "seed": 63,
+        "name": "synthetic-00062.png",
+        "bytes": 109866,
+        "sha256": "a0c26b6eaffdce29eab91105b996bb986cdc77b09fa2e69f2dbdda29ef818ce3"
+      },
+      {
+        "seed": 64,
+        "name": "synthetic-00063.png",
+        "bytes": 109875,
+        "sha256": "0bd9b2978e42458e92cfd3d0758cd1087f1dc8fc1a17bfabbe5768915e5721ae"
+      },
+      {
+        "seed": 65,
+        "name": "synthetic-00064.png",
+        "bytes": 109855,
+        "sha256": "9b3c6f287cab0a9307d9f64bebcc98e306a76fabb5113dc9383d91ebf54fda03"
+      },
+      {
+        "seed": 66,
+        "name": "synthetic-00065.png",
+        "bytes": 109872,
+        "sha256": "b3dfc94c0ce8e929ba90150476ed2cfc35936fdb109c05dd2acdb9cc2a345487"
+      },
+      {
+        "seed": 67,
+        "name": "synthetic-00066.png",
+        "bytes": 109862,
+        "sha256": "ad3bc6cb3723a94fb73716767f7b5163a97282a0185d24d4125851cf15ae9bdb"
+      },
+      {
+        "seed": 68,
+        "name": "synthetic-00067.png",
+        "bytes": 109871,
+        "sha256": "df2034b2cd03b1ade11c85566adbb91c4c9a62e459c157f14ce3053778e18a75"
+      },
+      {
+        "seed": 69,
+        "name": "synthetic-00068.png",
+        "bytes": 109862,
+        "sha256": "96b3fd41edf3305add231d3b956e0e9cde8566f12bda2b35963e513758097fe9"
+      },
+      {
+        "seed": 70,
+        "name": "synthetic-00069.png",
+        "bytes": 109865,
+        "sha256": "ec4eafaaf0b6643d199ecb32c673bf6679cacd7c91ce0ffca36677782d92efda"
+      },
+      {
+        "seed": 71,
+        "name": "synthetic-00070.png",
+        "bytes": 109879,
+        "sha256": "1822394be1b4dbc8e519d8720947d46a62050907ea997650b2b14283831d4113"
+      },
+      {
+        "seed": 72,
+        "name": "synthetic-00071.png",
+        "bytes": 109851,
+        "sha256": "57411af1b0031aac30c693fad540ac4d6f08989b62ad2aa6e70e39f75d46cc27"
+      },
+      {
+        "seed": 73,
+        "name": "synthetic-00072.png",
+        "bytes": 109867,
+        "sha256": "5b8fa2fdf701e2d9802e0188962a65052255aee4e55773957cc032ab73ea0f11"
+      },
+      {
+        "seed": 74,
+        "name": "synthetic-00073.png",
+        "bytes": 109867,
+        "sha256": "d078a37bb0bbfae8f36204be77708c62270288f8a58185100835058e2d543c12"
+      },
+      {
+        "seed": 75,
+        "name": "synthetic-00074.png",
+        "bytes": 109870,
+        "sha256": "857c607a482332a0a30679292d681757a9f727a9dfbeec217247da78f3d2fde7"
+      },
+      {
+        "seed": 76,
+        "name": "synthetic-00075.png",
+        "bytes": 109867,
+        "sha256": "105cf6ba2c9af03f9344394a8a247238ffac33f354bffc0ce399340b5b16031d"
+      },
+      {
+        "seed": 77,
+        "name": "synthetic-00076.png",
+        "bytes": 109865,
+        "sha256": "5c1eda1989252fba61ef72311c9fc432f28d40f2f11bc6bb88fe540304f6345c"
+      },
+      {
+        "seed": 78,
+        "name": "synthetic-00077.png",
+        "bytes": 109883,
+        "sha256": "1d91d056d7864e2cc35566ed16aa0e51c29cf6ffc4295eeb13265327729a9cc1"
+      },
+      {
+        "seed": 79,
+        "name": "synthetic-00078.png",
+        "bytes": 109844,
+        "sha256": "456e3fdd618f090243526c13db349ebccbc4844b0c3a6235cb2043c01b1a5e15"
+      },
+      {
+        "seed": 80,
+        "name": "synthetic-00079.png",
+        "bytes": 109887,
+        "sha256": "a5cebea4a22c20958fde9bdbf26bce2a3089dd3963f8b86d6b925df5287c7ddb"
+      },
+      {
+        "seed": 81,
+        "name": "synthetic-00080.png",
+        "bytes": 109865,
+        "sha256": "1319d2b531b84f3e55e9c7b4df954c4f50716ef55330480b6733758c96dc0d04"
+      },
+      {
+        "seed": 82,
+        "name": "synthetic-00081.png",
+        "bytes": 109881,
+        "sha256": "5cec594ce6ff7207d6945c57d4d25c1916231f56ebf8846dddcac4237ef475f4"
+      },
+      {
+        "seed": 83,
+        "name": "synthetic-00082.png",
+        "bytes": 109856,
+        "sha256": "caf7a959829bbc7c3483cfb9bc2a376a42d93a83251c38232401e2ed57a8f368"
+      },
+      {
+        "seed": 84,
+        "name": "synthetic-00083.png",
+        "bytes": 109862,
+        "sha256": "1e4dc61a5699e6b036512b749cd972db1b9d5898c3f09e7448cf94059e55e693"
+      },
+      {
+        "seed": 85,
+        "name": "synthetic-00084.png",
+        "bytes": 109854,
+        "sha256": "18af117730b6c26ab57bc76c7379880676965a51585ee3fc8d548708ec78f8b0"
+      },
+      {
+        "seed": 86,
+        "name": "synthetic-00085.png",
+        "bytes": 109857,
+        "sha256": "4a568eb231d6e5f8933c2d0c4fb6ab756cbe9fb684769790f8760a65c95dafee"
+      },
+      {
+        "seed": 87,
+        "name": "synthetic-00086.png",
+        "bytes": 109865,
+        "sha256": "05cfccd8cb375d7d43e397a7131b02119b8ac6e252d1d1bbb566fce79b74bd86"
+      },
+      {
+        "seed": 88,
+        "name": "synthetic-00087.png",
+        "bytes": 109868,
+        "sha256": "6b01b3aac6256529ad252bb7859e8569e12cdd366a4603e89d6493a5c7fc6c0b"
+      },
+      {
+        "seed": 89,
+        "name": "synthetic-00088.png",
+        "bytes": 109874,
+        "sha256": "0a8a1d63c5f9a1782812f6a3e9b252498e0607cc4723a593c4defaf4d4868f8f"
+      },
+      {
+        "seed": 90,
+        "name": "synthetic-00089.png",
+        "bytes": 109849,
+        "sha256": "69d09be1f033376abdcf8d125e3c367cebec7a35dce99e7f3526722ea617c2ba"
+      },
+      {
+        "seed": 91,
+        "name": "synthetic-00090.png",
+        "bytes": 109863,
+        "sha256": "2e57e17a866b931b4dbc77dc5702ba87ecc4d451b74bfbf4387e4cb7759f05aa"
+      },
+      {
+        "seed": 92,
+        "name": "synthetic-00091.png",
+        "bytes": 109868,
+        "sha256": "dbb9cb2ef6e4970f62617d6c403fc1b9cf05da868b229f2da399343122ccc03f"
+      },
+      {
+        "seed": 93,
+        "name": "synthetic-00092.png",
+        "bytes": 109878,
+        "sha256": "87517f20b141bbff4e3c792ed673123535c8712c25c452c9e820dfd2ed3a2837"
+      },
+      {
+        "seed": 94,
+        "name": "synthetic-00093.png",
+        "bytes": 109874,
+        "sha256": "416437ec404e2d224cd5890301f7abfd378fa30b1ecbb4c73e8fa9b8aeb038e2"
+      },
+      {
+        "seed": 95,
+        "name": "synthetic-00094.png",
+        "bytes": 109877,
+        "sha256": "70d510b52e78a2b1e432b7189a2b75f7dda442fb918e8c3f34c67b2793acbb11"
+      },
+      {
+        "seed": 96,
+        "name": "synthetic-00095.png",
+        "bytes": 109859,
+        "sha256": "f52de89ecfee7d61e004015b22714d9bd4d95114c7d9f91fd504aa5949810784"
+      },
+      {
+        "seed": 97,
+        "name": "synthetic-00096.png",
+        "bytes": 109850,
+        "sha256": "5dfe3f5ae081cfa551ab99efbf44f1cc1b6574221d034f3299d562d431d1d24b"
+      },
+      {
+        "seed": 98,
+        "name": "synthetic-00097.png",
+        "bytes": 109870,
+        "sha256": "dd1a2da30cc42a6a84c7bc1f4f48d5eb6c5dc8f8d5eb426efd55b06a4f756b27"
+      },
+      {
+        "seed": 99,
+        "name": "synthetic-00098.png",
+        "bytes": 109871,
+        "sha256": "252beee247043e496f49a2fcaed20ca7603cf9b6fe028f5a2d9c147b518d0f10"
+      },
+      {
+        "seed": 100,
+        "name": "synthetic-00099.png",
+        "bytes": 109874,
+        "sha256": "e83074976e6dd21aefc157e73f41ce9b325e89a02b47ed217a1c58efa087a3d0"
+      },
+      {
+        "seed": 101,
+        "name": "synthetic-00100.png",
+        "bytes": 109877,
+        "sha256": "95b7592d43f9d3d31c0f9adcb51ff6fd15bbe22bdcf5023e29e9699016690804"
+      },
+      {
+        "seed": 102,
+        "name": "synthetic-00101.png",
+        "bytes": 109869,
+        "sha256": "fbafaa388ddc0724e940caa81dd06b5d448a9d6fbd08affbff5e7a3cbf0dbed9"
+      },
+      {
+        "seed": 103,
+        "name": "synthetic-00102.png",
+        "bytes": 109859,
+        "sha256": "4d21e188ba2889345999cb9c2daea92feb758f51be17bb2c2af1fb3711c222c8"
+      },
+      {
+        "seed": 104,
+        "name": "synthetic-00103.png",
+        "bytes": 109856,
+        "sha256": "f8f145427369de4538f8496938f3c56ba8b2351ef713f33af2acc2fbd94bfc35"
+      },
+      {
+        "seed": 105,
+        "name": "synthetic-00104.png",
+        "bytes": 109883,
+        "sha256": "fef7e94f6a0da53c263fc7f3c85281be7d703486f4815286a308dde1a73fb7d6"
+      },
+      {
+        "seed": 106,
+        "name": "synthetic-00105.png",
+        "bytes": 109870,
+        "sha256": "ee79ff6745804f5bc9c60246707ffef2a13c1a401c5a3a3b48d52725ec92ffff"
+      },
+      {
+        "seed": 107,
+        "name": "synthetic-00106.png",
+        "bytes": 109890,
+        "sha256": "9b772aa5268dee3f3046fbce5c39a1d07ef814f3b06cdd9eb9576fa0b32f430c"
+      },
+      {
+        "seed": 108,
+        "name": "synthetic-00107.png",
+        "bytes": 109859,
+        "sha256": "f6a24dc21b00ccf00efc5dc14efc40aa4fa5e0aaccf2808daad131a56dc0371a"
+      },
+      {
+        "seed": 109,
+        "name": "synthetic-00108.png",
+        "bytes": 109874,
+        "sha256": "6d318df86d89e0fab929d7a0258ce873a2ec4844af7dcce3d10ae8514412b4ac"
+      },
+      {
+        "seed": 110,
+        "name": "synthetic-00109.png",
+        "bytes": 109855,
+        "sha256": "5413350ee830dd138f73e946be1e29bc2ee7ebec6b8c0f5eca55f602bf7428ad"
+      },
+      {
+        "seed": 111,
+        "name": "synthetic-00110.png",
+        "bytes": 109880,
+        "sha256": "24cdf0aa5d67f60742547ddadc0e149fd4f87ef705351ce4d2eb2b0d5b3ab2cb"
+      },
+      {
+        "seed": 112,
+        "name": "synthetic-00111.png",
+        "bytes": 109876,
+        "sha256": "a74c88fa2449b3e8116eb62803d0051f73ae464d7b32064433e0489756aad289"
+      },
+      {
+        "seed": 113,
+        "name": "synthetic-00112.png",
+        "bytes": 109875,
+        "sha256": "6f1c3977260fc717445c81356b627b737ebb2951b9cdcb80f20becc4096942af"
+      },
+      {
+        "seed": 114,
+        "name": "synthetic-00113.png",
+        "bytes": 109868,
+        "sha256": "ec193f9aaf07b2e276832a7d015722a43dc5bbe68c590c1434b4d073bdb53d90"
+      },
+      {
+        "seed": 115,
+        "name": "synthetic-00114.png",
+        "bytes": 109852,
+        "sha256": "1b30533e98f967d1351faaf3504faf080845cd72002589da5628628a99c81320"
+      },
+      {
+        "seed": 116,
+        "name": "synthetic-00115.png",
+        "bytes": 109872,
+        "sha256": "b4698dd88eeb7ebf27d93de671bfddcb8c80ba5e496e729587a3ad49ae0e93e1"
+      },
+      {
+        "seed": 117,
+        "name": "synthetic-00116.png",
+        "bytes": 109846,
+        "sha256": "edcfad1afda22020d12979fbf83e9901e992902f1fab823eb6053931951b4778"
+      },
+      {
+        "seed": 118,
+        "name": "synthetic-00117.png",
+        "bytes": 109879,
+        "sha256": "d911cbe27f95f5bbf33736638e0e6af5672e588d6ce5f338293ad82c98be53e8"
+      },
+      {
+        "seed": 119,
+        "name": "synthetic-00118.png",
+        "bytes": 109859,
+        "sha256": "ce206a7ed85919a77d1d9e47759c1539130d8f6e59f6745c90e3dd8821cb0d38"
+      },
+      {
+        "seed": 120,
+        "name": "synthetic-00119.png",
+        "bytes": 109862,
+        "sha256": "22fa4c6e2d125191a00ef6b6975dcfd7e8bebf5b9a8e5e9660eedec05a720310"
+      },
+      {
+        "seed": 121,
+        "name": "synthetic-00120.png",
+        "bytes": 109846,
+        "sha256": "a9e2335e4d35785d8a1e26264ed9a243f5ee66fc216dd02f9240e5065641735a"
+      },
+      {
+        "seed": 122,
+        "name": "synthetic-00121.png",
+        "bytes": 109869,
+        "sha256": "52ea94bd089d6d76cb57150283c7828bcdf12fde0251489e8725dc7075fbcc12"
+      },
+      {
+        "seed": 123,
+        "name": "synthetic-00122.png",
+        "bytes": 109873,
+        "sha256": "54301fe3ca91ffa32bac9b8c37bfd81c21e3702b6f6500171e5ca1e6d70ef291"
+      },
+      {
+        "seed": 124,
+        "name": "synthetic-00123.png",
+        "bytes": 109861,
+        "sha256": "237e85988772b0f39dc00fbaed77cbb1be90809b251f4d939799d7cc0789931e"
+      },
+      {
+        "seed": 125,
+        "name": "synthetic-00124.png",
+        "bytes": 109876,
+        "sha256": "4261dec0a094e78d9d62854e151590e9a974a3ca366fc2c6484fd7355bed55ac"
+      },
+      {
+        "seed": 126,
+        "name": "synthetic-00125.png",
+        "bytes": 109863,
+        "sha256": "2c67dbe80d20bc083037c23eef22549bd740086096f02dacafdd862e1b40c3bb"
+      },
+      {
+        "seed": 127,
+        "name": "synthetic-00126.png",
+        "bytes": 109866,
+        "sha256": "49e5d8e02586ba4f28d1244646364cc8e007792bb633e0bca9c28639c06bacc4"
+      },
+      {
+        "seed": 128,
+        "name": "synthetic-00127.png",
+        "bytes": 109879,
+        "sha256": "9e8b8d785bfe0b05efb92e4e0ae89e99fb88f691ad137d2b7de0e9ae054e5a31"
+      },
+      {
+        "seed": 129,
+        "name": "synthetic-00128.png",
+        "bytes": 109874,
+        "sha256": "2b5fc5a1bab55d819855487619ebda37a9e8f512ecb3ef9380be0f0777b0f461"
+      },
+      {
+        "seed": 130,
+        "name": "synthetic-00129.png",
+        "bytes": 109872,
+        "sha256": "2ff0cfc5647e4758b803415d98266af833ea509bf15d3e5deea33cc40e7f013d"
+      },
+      {
+        "seed": 131,
+        "name": "synthetic-00130.png",
+        "bytes": 109869,
+        "sha256": "2b8707473a37812c45116ac0e3006221a2cdf85040c6a7452953c44516395139"
+      },
+      {
+        "seed": 132,
+        "name": "synthetic-00131.png",
+        "bytes": 109871,
+        "sha256": "45e5c26ef460d2359ce9cd87ebf4083065ef03df7f2568d08474b02c6611207f"
+      },
+      {
+        "seed": 133,
+        "name": "synthetic-00132.png",
+        "bytes": 109867,
+        "sha256": "975c3797a3b287b5ab4f025298f1b5f6e827b22158e8dfd38074b0a75d7de630"
+      },
+      {
+        "seed": 134,
+        "name": "synthetic-00133.png",
+        "bytes": 109883,
+        "sha256": "93ae1792b5b896efdd64653fd0061a71469c76763c0336b15346caa6a44c217d"
+      },
+      {
+        "seed": 135,
+        "name": "synthetic-00134.png",
+        "bytes": 109849,
+        "sha256": "073c491201fc571c9e28ed8b2efb9e1194f2000e010881e3849d3c466abaa09c"
+      },
+      {
+        "seed": 136,
+        "name": "synthetic-00135.png",
+        "bytes": 109886,
+        "sha256": "f1fdcb5680db9512da5a2fa120645e34541468e989b26480ca0c40c825a91969"
+      },
+      {
+        "seed": 137,
+        "name": "synthetic-00136.png",
+        "bytes": 109893,
+        "sha256": "f0daf7e842eb73f01bdeb4229f008e7a6586bab9a95f120fd44091691b617a4b"
+      },
+      {
+        "seed": 138,
+        "name": "synthetic-00137.png",
+        "bytes": 109875,
+        "sha256": "8eb19d7d11d26a3300421fcf10d155878510f79867525b3fa7b6228ea02890d7"
+      },
+      {
+        "seed": 139,
+        "name": "synthetic-00138.png",
+        "bytes": 109869,
+        "sha256": "a35bf65fd95757c4a4162cdb9313b592e9302c5090f7eefbc2a7fb3773a26cb2"
+      },
+      {
+        "seed": 140,
+        "name": "synthetic-00139.png",
+        "bytes": 109881,
+        "sha256": "b0b4648ca30daa50db9cea1e28bdd7c07d41e9c8d2519f461eaa42f1466017c3"
+      },
+      {
+        "seed": 141,
+        "name": "synthetic-00140.png",
+        "bytes": 109866,
+        "sha256": "f02e5c7877ceb73303f496e9720cc8f78cae212be71b4dfeb18addcce1defdc7"
+      },
+      {
+        "seed": 142,
+        "name": "synthetic-00141.png",
+        "bytes": 109875,
+        "sha256": "2d1e5f1a425d1582e6922e68e3745be6c8c404b37b26cb85ee9d9437014e442a"
+      },
+      {
+        "seed": 143,
+        "name": "synthetic-00142.png",
+        "bytes": 109861,
+        "sha256": "06545487a199a12d9d726510fbe52f5a48cea84b223fb847200641e4511e5cbf"
+      },
+      {
+        "seed": 144,
+        "name": "synthetic-00143.png",
+        "bytes": 109865,
+        "sha256": "df818d8c7fab1d128619b9b687b71f1d2fe04259ff5261a014af8b503e99330f"
+      },
+      {
+        "seed": 145,
+        "name": "synthetic-00144.png",
+        "bytes": 109868,
+        "sha256": "b45ab73c32cb604bc4b3bba8117d5b93b9d05331a247efa6b97caba8f108b3d8"
+      },
+      {
+        "seed": 146,
+        "name": "synthetic-00145.png",
+        "bytes": 109908,
+        "sha256": "83293f8a6b22efad3c4dd3b892a003f4f6f7d4744c0fb8618fcd573d67f29f87"
+      },
+      {
+        "seed": 147,
+        "name": "synthetic-00146.png",
+        "bytes": 109870,
+        "sha256": "ba94003c008ab2839f1b5689efd8601fc16c2d47c0d5254db5f92e0a3510bb90"
+      },
+      {
+        "seed": 148,
+        "name": "synthetic-00147.png",
+        "bytes": 109859,
+        "sha256": "4a30886e25bc3380adeb15d4d35e045d6ffd5f90e08ea084796b0fccaa7a4fc4"
+      },
+      {
+        "seed": 149,
+        "name": "synthetic-00148.png",
+        "bytes": 109864,
+        "sha256": "53144e8923a5c851d044beec412de574db1fd6c5212ea616ad32565cd7f82c4d"
+      },
+      {
+        "seed": 150,
+        "name": "synthetic-00149.png",
+        "bytes": 109871,
+        "sha256": "8113965c35bcd4c009313381d709467cb99c93cef3bfe610820f3d6071c04d13"
+      },
+      {
+        "seed": 151,
+        "name": "synthetic-00150.png",
+        "bytes": 109867,
+        "sha256": "6775f75b2f8dec57d3be7f3835f58a338487d0fad883292c794e4b0077e1e97b"
+      },
+      {
+        "seed": 152,
+        "name": "synthetic-00151.png",
+        "bytes": 109874,
+        "sha256": "0ad782095ca9d86a3d0b44d3ae3ee30386528fd0c5dee329e1fa5db581949993"
+      },
+      {
+        "seed": 153,
+        "name": "synthetic-00152.png",
+        "bytes": 109869,
+        "sha256": "8c4410073ff2ac0629db1bf0a40ac840590498f0f58d7abe59c6559a51b5a092"
+      },
+      {
+        "seed": 154,
+        "name": "synthetic-00153.png",
+        "bytes": 109859,
+        "sha256": "6a0ad03b6d6038679777c8e2f1f4b3aad6b219d2b00e8d673a53e6509066053e"
+      },
+      {
+        "seed": 155,
+        "name": "synthetic-00154.png",
+        "bytes": 109833,
+        "sha256": "ce371ea0be0393464d4b521edd7cfdd113c0a3c6307474a1ad29fd53cdb38087"
+      },
+      {
+        "seed": 156,
+        "name": "synthetic-00155.png",
+        "bytes": 109871,
+        "sha256": "e10ebbe25bb3e47afc416a482d12e09642bf61b86ba8d67fa686672beeed064c"
+      },
+      {
+        "seed": 157,
+        "name": "synthetic-00156.png",
+        "bytes": 109868,
+        "sha256": "19bc59d13a56b34962f309f55ba738e3e20c09e10bc8f4978ae6156b0ee3e2b1"
+      },
+      {
+        "seed": 158,
+        "name": "synthetic-00157.png",
+        "bytes": 109855,
+        "sha256": "042bd5a4b977fea42dc7d7558db0d49b43906b3819e698bb5b72783c21e5e885"
+      },
+      {
+        "seed": 159,
+        "name": "synthetic-00158.png",
+        "bytes": 109863,
+        "sha256": "6ff085c8021b6ae05c5bb95fe278e612bcbfc54c0610c06491c71f6faf8b2188"
+      },
+      {
+        "seed": 160,
+        "name": "synthetic-00159.png",
+        "bytes": 109861,
+        "sha256": "8b0e8b8ab3fa5a9efcf79343eaa2015778994abc56d2e7070c9f4e82f5767e70"
+      },
+      {
+        "seed": 161,
+        "name": "synthetic-00160.png",
+        "bytes": 109879,
+        "sha256": "b1d2da580b1494f3e0bbe0b512c6b4d9b446cd2bd0deb017924c715a271a9f38"
+      },
+      {
+        "seed": 162,
+        "name": "synthetic-00161.png",
+        "bytes": 109845,
+        "sha256": "7209934dc28ab338d1aa60b7c49e76b424cad4596d38085096509772cf696a5f"
+      },
+      {
+        "seed": 163,
+        "name": "synthetic-00162.png",
+        "bytes": 109881,
+        "sha256": "fc955eb47ce221038655badfee8c019e7ff299a7f8765e0fabeeb6b95873b030"
+      },
+      {
+        "seed": 164,
+        "name": "synthetic-00163.png",
+        "bytes": 109872,
+        "sha256": "a336e7f898de4ee89f62593173a9bd38bb19a1120db52d796b1f201eea3e8822"
+      },
+      {
+        "seed": 165,
+        "name": "synthetic-00164.png",
+        "bytes": 109887,
+        "sha256": "d33115f34da3198c7c94b3947aac466d905c5e4fadd01221478c6e4f7e09993c"
+      },
+      {
+        "seed": 166,
+        "name": "synthetic-00165.png",
+        "bytes": 109841,
+        "sha256": "6abc21ff0dfca3b84ff48c4920a9a94a8401501c2d82601884aaa5e4297f585e"
+      },
+      {
+        "seed": 167,
+        "name": "synthetic-00166.png",
+        "bytes": 109866,
+        "sha256": "db4cf658f62fe2e31319486d80bd8a0540bde00b33d172ab1204a7450ee44e70"
+      },
+      {
+        "seed": 168,
+        "name": "synthetic-00167.png",
+        "bytes": 109869,
+        "sha256": "e96f986a93765048c49d56778fcc709e543828e97a9cbd4f14193374a9ab388c"
+      },
+      {
+        "seed": 169,
+        "name": "synthetic-00168.png",
+        "bytes": 109880,
+        "sha256": "9c0e6745607d5dd96911815a9a070f3432ca2dd34b6395effe728e0cf1c5cb86"
+      },
+      {
+        "seed": 170,
+        "name": "synthetic-00169.png",
+        "bytes": 109870,
+        "sha256": "fbd3ce34866f9d5f6cf2308da6ddde61cc56c6e2177ddc669eceaf7bae5d1785"
+      },
+      {
+        "seed": 171,
+        "name": "synthetic-00170.png",
+        "bytes": 109867,
+        "sha256": "12bc2060d1c21764bd118f46d59c9db41744c0d8020202de62c24727eb1734d8"
+      },
+      {
+        "seed": 172,
+        "name": "synthetic-00171.png",
+        "bytes": 109871,
+        "sha256": "ecd9d385f7fafabaf14f3a9ff88180f90bce557e004d633562ff0a12fa3fba28"
+      },
+      {
+        "seed": 173,
+        "name": "synthetic-00172.png",
+        "bytes": 109850,
+        "sha256": "2dddf83abbb88a87cd6b6d9e7da1d2869461a7233075059d5082d3f28b0bede2"
+      },
+      {
+        "seed": 174,
+        "name": "synthetic-00173.png",
+        "bytes": 109871,
+        "sha256": "ba67be14f24a7f41807fe7d53ef43ece0703d5e263f4d1c916b93730175630ea"
+      },
+      {
+        "seed": 175,
+        "name": "synthetic-00174.png",
+        "bytes": 109876,
+        "sha256": "c1dffd830c1cec2f46cfe6b3a0ac5c616b61fb1e3c5c4afd68b9f44ea8d8ed1e"
+      },
+      {
+        "seed": 176,
+        "name": "synthetic-00175.png",
+        "bytes": 109878,
+        "sha256": "62d0896fae81d0d5fe7a0c50bda02f169e11f3e560eafede6ef5a7540ac9fc8a"
+      },
+      {
+        "seed": 177,
+        "name": "synthetic-00176.png",
+        "bytes": 109883,
+        "sha256": "fb4af9c4ebe2b6f9a0f72777b565ab44665f2d5766b3bebb17eb35815645dade"
+      },
+      {
+        "seed": 178,
+        "name": "synthetic-00177.png",
+        "bytes": 109862,
+        "sha256": "f04f98182df7ff0518d803f7239e284ebb2d333ff461dd536d3814ddaca96c7b"
+      },
+      {
+        "seed": 179,
+        "name": "synthetic-00178.png",
+        "bytes": 109860,
+        "sha256": "2f982b1fa9b72e59c5da88d11a3169be4c2367a8b95bc83aef3f4c59c5f176cc"
+      },
+      {
+        "seed": 180,
+        "name": "synthetic-00179.png",
+        "bytes": 109850,
+        "sha256": "48ee70f21857118fa35d8b3ac04e21ec32a3d5fd9a1b6e9e4827e585900117b6"
+      },
+      {
+        "seed": 181,
+        "name": "synthetic-00180.png",
+        "bytes": 109874,
+        "sha256": "7b4fb1abc066020cd412d142b2d0154e91204445278627205a54f900aa491e5c"
+      },
+      {
+        "seed": 182,
+        "name": "synthetic-00181.png",
+        "bytes": 109856,
+        "sha256": "696d73f9d5e1d3d81cb4d6fff124c68c0378cd0fd73bf3cca14ddae3474fd987"
+      },
+      {
+        "seed": 183,
+        "name": "synthetic-00182.png",
+        "bytes": 109873,
+        "sha256": "8818d745a2a0c387dc14c0632d846aa78b675830927f8af22ea6b8303ec8010a"
+      },
+      {
+        "seed": 184,
+        "name": "synthetic-00183.png",
+        "bytes": 109873,
+        "sha256": "ff9f0776c9d12dc74cd0c54566ed978daa113783b3c7b2f7fb4554b639dd02bf"
+      },
+      {
+        "seed": 185,
+        "name": "synthetic-00184.png",
+        "bytes": 109872,
+        "sha256": "268e8e9a355a8bc074ec105cc423f59c02b789d480e0bced460ab9e2d57b2513"
+      },
+      {
+        "seed": 186,
+        "name": "synthetic-00185.png",
+        "bytes": 109863,
+        "sha256": "441eee4818137837d6400992295c10f5f08ac3174fbb4ac0a616e6eeda0e2865"
+      },
+      {
+        "seed": 187,
+        "name": "synthetic-00186.png",
+        "bytes": 109865,
+        "sha256": "474be95c80cbdc24d3ae50cdc6111f67b8fa0568d118b9f2d0f79da5ab7e3608"
+      },
+      {
+        "seed": 188,
+        "name": "synthetic-00187.png",
+        "bytes": 109874,
+        "sha256": "0743d592b647dc5b00d10b46575aecd19e83d9947540b83f2d2714c763b60279"
+      },
+      {
+        "seed": 189,
+        "name": "synthetic-00188.png",
+        "bytes": 109854,
+        "sha256": "d4819d63b0e391571e1dc49d1e1757755c753df89269a11b8563dd843ff2f16f"
+      },
+      {
+        "seed": 190,
+        "name": "synthetic-00189.png",
+        "bytes": 109865,
+        "sha256": "906a2665b13fa09a6b86fb4f24950e1b60483aa2b69fa4483fb5f01a29d53fe5"
+      },
+      {
+        "seed": 191,
+        "name": "synthetic-00190.png",
+        "bytes": 109865,
+        "sha256": "a477799923e514791874eff4bb0ea082e549ab72d00f32200382f40ba9e59941"
+      },
+      {
+        "seed": 192,
+        "name": "synthetic-00191.png",
+        "bytes": 109875,
+        "sha256": "fcac6ab9f9564aec00bc1d12bd603446b425c7c628098c0b58d1ff47fae8ba58"
+      },
+      {
+        "seed": 193,
+        "name": "synthetic-00192.png",
+        "bytes": 109857,
+        "sha256": "e642260e49a75a5e229759db5233049b84bf0ed12454dd98c5ef548c0e9d70ed"
+      },
+      {
+        "seed": 194,
+        "name": "synthetic-00193.png",
+        "bytes": 109864,
+        "sha256": "7326c1af7779424f5083c5fba8cde1ab5720f4106fb369268197c6a7eaf0199f"
+      },
+      {
+        "seed": 195,
+        "name": "synthetic-00194.png",
+        "bytes": 109872,
+        "sha256": "d8b272b97cdb32879992e1c5b848dae8b2e64934752eb16ea5ecfcaf8e4d041e"
+      },
+      {
+        "seed": 196,
+        "name": "synthetic-00195.png",
+        "bytes": 109871,
+        "sha256": "1bc3d1be5b50c958ca31adcca05753f26e0b66071ceb9fa8610f3823635f7fc3"
+      },
+      {
+        "seed": 197,
+        "name": "synthetic-00196.png",
+        "bytes": 109870,
+        "sha256": "9bbc4066367b2b6c71ed60353043f1e60a49a094be45540be75f3238c989517e"
+      },
+      {
+        "seed": 198,
+        "name": "synthetic-00197.png",
+        "bytes": 109872,
+        "sha256": "f46b1bd7a2fb983559bf754b4c78cbffaefadb8079a3e35cf24806181c3a8311"
+      },
+      {
+        "seed": 199,
+        "name": "synthetic-00198.png",
+        "bytes": 109879,
+        "sha256": "1cd2dcda822613dbcbc5fd1067073b83015d9aad0c21d0c78142e6c0d53c1593"
+      },
+      {
+        "seed": 200,
+        "name": "synthetic-00199.png",
+        "bytes": 109856,
+        "sha256": "b67bfc7bc429ee4cabc5c1092fd34a0d6161e36316eedcba12f70b6f52a22257"
+      },
+      {
+        "seed": 201,
+        "name": "synthetic-00200.png",
+        "bytes": 109860,
+        "sha256": "0a5c0f14ae94ae69a6c6a6748d573590665fe614050d1be39b9ea20c522d314d"
+      },
+      {
+        "seed": 202,
+        "name": "synthetic-00201.png",
+        "bytes": 109871,
+        "sha256": "5e3d91bd6fab6220f22d3f4f01edd78ef2ca087e546c37ab07205326f97face4"
+      },
+      {
+        "seed": 203,
+        "name": "synthetic-00202.png",
+        "bytes": 109868,
+        "sha256": "58995b0159333357ffa40826b7e00fca2dd00733d3b94ea23034ef86e6a96c98"
+      },
+      {
+        "seed": 204,
+        "name": "synthetic-00203.png",
+        "bytes": 109866,
+        "sha256": "f3affab020cfbea24fbbaceaac798fdb2d0524470611dd6c9db744d3c2fff7e2"
+      },
+      {
+        "seed": 205,
+        "name": "synthetic-00204.png",
+        "bytes": 109858,
+        "sha256": "87339308769731e3d907fda10d29869f5795f7d37d28ada20dde1d91e0c2364b"
+      },
+      {
+        "seed": 206,
+        "name": "synthetic-00205.png",
+        "bytes": 109874,
+        "sha256": "026bf9ff1272fee501cc8e7f8c9e9d096f199967cdc65982bcc960e10626434f"
+      },
+      {
+        "seed": 207,
+        "name": "synthetic-00206.png",
+        "bytes": 109853,
+        "sha256": "c66321418295817887f0a9f93dd78d0c7fc639380f76cc5261d82a5bdad76ffb"
+      },
+      {
+        "seed": 208,
+        "name": "synthetic-00207.png",
+        "bytes": 109883,
+        "sha256": "fe0d2f05e1995297bcda197ae591dcda43420a6d5e0c42b13ad03597f2cfe033"
+      },
+      {
+        "seed": 209,
+        "name": "synthetic-00208.png",
+        "bytes": 109866,
+        "sha256": "b5902170b9aa097ea1ed742c410d25c2f7072f6e8acb8805eccf96296b79e211"
+      },
+      {
+        "seed": 210,
+        "name": "synthetic-00209.png",
+        "bytes": 109876,
+        "sha256": "3c2cb0954ac527eb7ae14addf1ed6939ef06e250d068612950e8a5d528d6724c"
+      },
+      {
+        "seed": 211,
+        "name": "synthetic-00210.png",
+        "bytes": 109851,
+        "sha256": "3fcb8590602d613b64f16202b17c5c4245fd54c049c5b055d8e447b4f85b732b"
+      },
+      {
+        "seed": 212,
+        "name": "synthetic-00211.png",
+        "bytes": 109859,
+        "sha256": "78ba76bba97202659df7714aea5e1e64d96c96d857ac8ebbba97e8de68882575"
+      },
+      {
+        "seed": 213,
+        "name": "synthetic-00212.png",
+        "bytes": 109842,
+        "sha256": "c751d7275f772bad4afedb3f53601ee726039cf70367ab2297d991c146d9683e"
+      },
+      {
+        "seed": 214,
+        "name": "synthetic-00213.png",
+        "bytes": 109866,
+        "sha256": "fafc6b8e63ff9fd4ac0c015ddebe72b90131ea20c12b755feec87cf1f0b226aa"
+      },
+      {
+        "seed": 215,
+        "name": "synthetic-00214.png",
+        "bytes": 109871,
+        "sha256": "b67e5f145a897608ff64f0540e5283f1b193c924fb4cfab2abd093f74abf1e5a"
+      },
+      {
+        "seed": 216,
+        "name": "synthetic-00215.png",
+        "bytes": 109867,
+        "sha256": "9de092d7848df47c165f100d63fd2ba8ffefbdffd0fa0f253164ecf7980db00d"
+      },
+      {
+        "seed": 217,
+        "name": "synthetic-00216.png",
+        "bytes": 109873,
+        "sha256": "d2d4782087df6e9b7e663b99e01edf7de91966d8b60da8191d2ad5ef4cd55ed4"
+      },
+      {
+        "seed": 218,
+        "name": "synthetic-00217.png",
+        "bytes": 109853,
+        "sha256": "e29fcb648a7084539002183a8a9927925b2bd72a4ed86de86ce7c3ca487b4e9d"
+      },
+      {
+        "seed": 219,
+        "name": "synthetic-00218.png",
+        "bytes": 109876,
+        "sha256": "179a1b864d33d7fe8454de20910e9f5774a35b90a35c288b78ca2dbce9abe2e2"
+      },
+      {
+        "seed": 220,
+        "name": "synthetic-00219.png",
+        "bytes": 109867,
+        "sha256": "f71afd264b1834ad98e1a9e0cefe36df697a3c4dfc80f442d33bb32c35be6f37"
+      },
+      {
+        "seed": 221,
+        "name": "synthetic-00220.png",
+        "bytes": 109877,
+        "sha256": "94562f2baad7c3209ab1f330283898b9ee142b8392a395fc60d4752b6af5dc32"
+      },
+      {
+        "seed": 222,
+        "name": "synthetic-00221.png",
+        "bytes": 109866,
+        "sha256": "4119fc47a10f154cf616bb531e53bf499ab760ff32ab3d8eae18119470245ccc"
+      },
+      {
+        "seed": 223,
+        "name": "synthetic-00222.png",
+        "bytes": 109869,
+        "sha256": "835e29a8cf61185d73ac921321ece6984cec6fc0bb903f0d0587f4e34e54b6e5"
+      },
+      {
+        "seed": 224,
+        "name": "synthetic-00223.png",
+        "bytes": 109856,
+        "sha256": "0bc5d873dd925fd7e33e2c0ef0735883b0417fccd91b149accae8662aea308bc"
+      },
+      {
+        "seed": 225,
+        "name": "synthetic-00224.png",
+        "bytes": 109843,
+        "sha256": "a594d8a84b16909db9743261c89b6aba91b7e0911c514df4a5696fc1ae719f87"
+      },
+      {
+        "seed": 226,
+        "name": "synthetic-00225.png",
+        "bytes": 109874,
+        "sha256": "20991cff7cf0581c5040f813e7d66e59530e91afa2f8a68f67a96762b4a52c54"
+      },
+      {
+        "seed": 227,
+        "name": "synthetic-00226.png",
+        "bytes": 109870,
+        "sha256": "9d1377ea254f5d241d8ef2c6f3d21b14068d0ecdfa8c8fd0f82cdce4ad4f3bad"
+      },
+      {
+        "seed": 228,
+        "name": "synthetic-00227.png",
+        "bytes": 109875,
+        "sha256": "a8342ee43bb88b3eee241f8b08e37027ef6b226661855920c5274218ffc9ab10"
+      },
+      {
+        "seed": 229,
+        "name": "synthetic-00228.png",
+        "bytes": 109879,
+        "sha256": "cdc38ad9ae71626d6b9a417bdfac97bd75ef1c980310e4cb1fca8f84d713f16f"
+      },
+      {
+        "seed": 230,
+        "name": "synthetic-00229.png",
+        "bytes": 109868,
+        "sha256": "611dc20abc23ce083fde0dcde190dd720631542d9df22ae95a2df01713910c2a"
+      },
+      {
+        "seed": 231,
+        "name": "synthetic-00230.png",
+        "bytes": 109870,
+        "sha256": "eb2341f981735e31a9ac960f084df179d85b7f7a1e8a0ae5fa36d3a97feeb3f9"
+      },
+      {
+        "seed": 232,
+        "name": "synthetic-00231.png",
+        "bytes": 109862,
+        "sha256": "b6fca5b16e76e22ead86573318aa91902df20d4f3d5ef598e421fbfceddfbeb5"
+      },
+      {
+        "seed": 233,
+        "name": "synthetic-00232.png",
+        "bytes": 109879,
+        "sha256": "44bff79408f837d9557f136ad8f21ecbeddfd64cb18b8a18aeec287030469e09"
+      },
+      {
+        "seed": 234,
+        "name": "synthetic-00233.png",
+        "bytes": 109868,
+        "sha256": "6a3a17fb51316e182129e6e7cda5042f3514294dda61ca202d212576b820c1be"
+      },
+      {
+        "seed": 235,
+        "name": "synthetic-00234.png",
+        "bytes": 109889,
+        "sha256": "da444e5c76ac72d33a6262b5824cbe295b4723e602d8e6787ce4680aeea6e40f"
+      },
+      {
+        "seed": 236,
+        "name": "synthetic-00235.png",
+        "bytes": 109859,
+        "sha256": "6a594961e8fe3153064fd5623f9a2c8a1706756e1ff3e69340e91ce792eb4723"
+      },
+      {
+        "seed": 237,
+        "name": "synthetic-00236.png",
+        "bytes": 109865,
+        "sha256": "71ebceeea48a5df3ad1ed54f58d4b68224973a68c3b7e5e0653d4189248f3d57"
+      },
+      {
+        "seed": 238,
+        "name": "synthetic-00237.png",
+        "bytes": 109853,
+        "sha256": "1ec2367302dba3393599318ba22f9e169457c6ae2551e054bf5e593a680bb9ba"
+      },
+      {
+        "seed": 239,
+        "name": "synthetic-00238.png",
+        "bytes": 109871,
+        "sha256": "b0596eca831732f0f45487570834bf533f77adcf2a75d67a3f602ab6b0a52811"
+      },
+      {
+        "seed": 240,
+        "name": "synthetic-00239.png",
+        "bytes": 109866,
+        "sha256": "3224aa9bd5897b49fd00e36ca9e0b6e35a329f9c5eb46ac9cbcc15b5ee24dec3"
+      },
+      {
+        "seed": 241,
+        "name": "synthetic-00240.png",
+        "bytes": 109853,
+        "sha256": "29e9e2673592dc3ee37937c9fe9ab3507ff002e2b32bef3c0c610dfe08b54b32"
+      },
+      {
+        "seed": 242,
+        "name": "synthetic-00241.png",
+        "bytes": 109866,
+        "sha256": "02b586bfa81ee0cf10c3b3c0c69e72da8cac7dc2cfecff8a4722522295da878f"
+      },
+      {
+        "seed": 243,
+        "name": "synthetic-00242.png",
+        "bytes": 109862,
+        "sha256": "0cf3d2a4a9cfd70894825231ed92377916bb788af0f63c52e57c81ad9f2454b6"
+      },
+      {
+        "seed": 244,
+        "name": "synthetic-00243.png",
+        "bytes": 109875,
+        "sha256": "143909ad0ac688de2d869599c02cb6dbbdedd1981602d9786f6495ba2c1e7041"
+      },
+      {
+        "seed": 245,
+        "name": "synthetic-00244.png",
+        "bytes": 109850,
+        "sha256": "ff6b65521ae0f891e11b47477b69c317e943b84b49306194a477d82daba281ed"
+      },
+      {
+        "seed": 246,
+        "name": "synthetic-00245.png",
+        "bytes": 109880,
+        "sha256": "b6b8ada5070c4c2525294c14e94b8161750d3f3641dca0b2615cadb29c3a03a7"
+      },
+      {
+        "seed": 247,
+        "name": "synthetic-00246.png",
+        "bytes": 109858,
+        "sha256": "938e103a97ec172797e955fe4aaa2c3692cb5a3c83a11082f476d0aefb6b9af5"
+      },
+      {
+        "seed": 248,
+        "name": "synthetic-00247.png",
+        "bytes": 109871,
+        "sha256": "5cbc22d307d6c4d32ce085ef4ece68d8fae3bbf70617aefa7dfb52915346c57a"
+      },
+      {
+        "seed": 249,
+        "name": "synthetic-00248.png",
+        "bytes": 109845,
+        "sha256": "5493d2d9769d9aa79fcb118f9b12e00545f2137ef74b8d2c0214b3ac1f331dd4"
+      },
+      {
+        "seed": 250,
+        "name": "synthetic-00249.png",
+        "bytes": 109870,
+        "sha256": "9e095ddab682215b628e8c2a27e9684f2f0f928f56959b9ccc1cc872fd3018ec"
+      },
+      {
+        "seed": 251,
+        "name": "synthetic-00250.png",
+        "bytes": 109872,
+        "sha256": "32d7c63049f01547297106f2037c73081544afeba325302497dc97fd7bc996de"
+      },
+      {
+        "seed": 252,
+        "name": "synthetic-00251.png",
+        "bytes": 109862,
+        "sha256": "472251990bb2d37c196fc7c8eb223076f6c11ea54227e44d599547e70402cad9"
+      },
+      {
+        "seed": 253,
+        "name": "synthetic-00252.png",
+        "bytes": 109874,
+        "sha256": "a14759579baf8d93809d959340dfd9bfeaf97222ae92feface3a4e037a2e4b50"
+      },
+      {
+        "seed": 254,
+        "name": "synthetic-00253.png",
+        "bytes": 109861,
+        "sha256": "1ad9f54101c00253cd0ed053314ee56e6df541f4b6f037009f90209b4e81ac2d"
+      },
+      {
+        "seed": 255,
+        "name": "synthetic-00254.png",
+        "bytes": 109875,
+        "sha256": "ef276d2f5c70233b6155a762553e0d1a61aa6b3a5c930526bb1dd856206ee978"
+      },
+      {
+        "seed": 256,
+        "name": "synthetic-00255.png",
+        "bytes": 109867,
+        "sha256": "643ce2503899f66f3d678f1598597055b6f4e7b5fe140722bbdf60c4c43e4053"
+      }
+    ],
+    "names": "synthetic-{index padded to 5 digits}.png; seed=index+1; pixel channels periodic modulo 256",
+    "generation": "one raw image at a time; up to 256 encoded disk images; remaining names are hard links; UI selects at most 100 paths per batch"
+  },
+  "latency": {
+    "samples": 50,
+    "p95RequestToCommitAckMs": 17.099999994039536,
+    "p95InputToCommitAckMs": 17.200000002980232,
+    "p95InputToRenderOpportunityMs": 49.79999999701977,
+    "percentileMethod": "nearest rank, ceil(0.95*N), no discarded warm-up samples"
+  },
+  "instrumentation": {
+    "imports": 10000,
+    "failedImports": 0,
+    "requests": {
+      "catalog-list": 1,
+      "catalog-create": 1,
+      "workspace-open": 1,
+      "unlock": 1,
+      "schema-open": 101,
+      "schema-finish": 1,
+      "workspace-list": 5051,
+      "file-fingerprint": 10000,
+      "sanitize": 10000,
+      "workspace-import": 10000,
+      "workspace-read": 32,
+      "workspace-update": 50
+    }
+  },
+  "gates": {
+    "fullReferenceWorkload": true,
+    "committedCatalogCount": 10000,
+    "persistedTailImageAndFinalEditAfterReload": true,
+    "sampledRenderedResourcesWithinBounds": true,
+    "renderedBounds": {
+      "galleryItems": 100,
+      "catalogResultItems": 100,
+      "annotationCanvases": 1,
+      "mediaElements": 4,
+      "mainWindowObjectUrls": 4,
+      "liveWorkers": 2
+    },
+    "navigationActiveUrls": [
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1
+    ],
+    "navigationLiveWorkers": [
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2,
+      2
+    ],
+    "commitAckP95Below250Ms": true,
+    "renderOpportunityP95Below50Ms": true,
+    "totalProcessMemoryBelow768MiB": null,
+    "pointerDragP95Below50Ms": null,
+    "releaseCertification": false
+  },
+  "finishedAt": "2026-10-17T21:57:57.455Z",
+  "totalWallMs": 771451.996708
+}

@@ -7,8 +7,9 @@ import { documentSchema } from '../domain/model';
 import type { StorageRequest, VaultStatus, WorkspaceDescriptor } from '../workers/protocol';
 import { workspaceCatalogSchema, workspaceDescriptorSchema, workspaceIdSchema } from '../workers/protocol';
 import { BackupReader, BackupWriter, restoredDocument } from './backup';
-import { applyDatasetSchema, datasetSchemaSchema, emptyDatasetSchema, extendDatasetSchema, mergeDatasetSchema } from '../domain/dataset-schema';
-import type { DatasetSchema } from '../domain/dataset-schema';
+import { applyDatasetMigration, applyDatasetSchema, datasetSchemaSchema, emptyDatasetSchema, extendDatasetSchema, mergeDatasetSchema, validateDatasetMigration } from '../domain/dataset-schema';
+import type { ClassRemaps, DatasetSchema } from '../domain/dataset-schema';
+import type { SchemaMigrationPreview } from '../workers/protocol';
 import type { AnnotationDocument } from '../domain/model';
 import { checkMaskPayloads, checkTile, maskIds, TILE_BYTES } from '../domain/masks';
 import { hex, recoverySecretSchema } from '../crypto/vault';
@@ -34,6 +35,7 @@ export class VaultStore {
   private recovered = 0;
   private datasetSchema: DatasetSchema | undefined;
   private schemaScan: { ids: string[]; index: number; schema: DatasetSchema } | undefined;
+  private schemaMigration: { preview: SchemaMigrationPreview; previous: DatasetSchema; remaps: ClassRemaps } | undefined;
   private masksPruned = false;
   private archive: {
     session: string; index: number; count: number;
@@ -85,7 +87,7 @@ export class VaultStore {
       return store;
     } catch (error) { db.close(); pool.pauseVfs(); throw error; }
   }
-  close(): void { this.root = undefined; this.datasetSchema = undefined; this.schemaScan = undefined; this.db.close(); this.releaseHandles(); }
+  close(): void { this.root = undefined; this.datasetSchema = undefined; this.schemaScan = undefined; this.schemaMigration = undefined; this.db.close(); this.releaseHandles(); }
   static async openSelected(id: string): Promise<VaultStore> {
     workspaceIdSchema.parse(id);
     const descriptor = (await VaultStore.handleCatalog({ type: 'catalog-list' })).find(item => item.id === id);
@@ -226,6 +228,10 @@ export class VaultStore {
     };
   }
   async handle(request: StorageRequest): Promise<unknown> {
+    if (!['schema-preview', 'schema-apply', 'schema-cancel', 'schema-open', 'status', 'workspace-list',
+      'workspace-export-info', 'workspace-read', 'workspace-mask-read', 'workspace-thumbnail', 'read'].includes(request.type)) {
+      this.schemaMigration = undefined;
+    }
     if (this.schemaScan && !['schema-open', 'schema-step', 'schema-finish', 'status'].includes(request.type)) {
       throw new Error('Workspace schema migration is in progress. Finish it or reopen the workspace before making changes.');
     }
@@ -306,6 +312,13 @@ export class VaultStore {
         this.db.exec({ sql: 'UPDATE dataset_schema SET payload=? WHERE id=1', bind: [encrypted] });
         this.datasetSchema = next;
         return { ready: true, completed: 0, total: 0, schema: next };
+      }
+      case 'schema-preview': return this.previewSchemaMigration(request);
+      case 'schema-apply': return this.applySchemaMigration(request.token, request.confirmDiscard);
+      case 'schema-cancel': {
+        if (this.schemaMigration?.preview.token !== request.token) throw new Error('Workspace schema migration preview is stale. Preview again.');
+        this.schemaMigration = undefined;
+        return { complete: true, count: 0 };
       }
       case 'status': return this.status();
       case 'create': {
@@ -393,6 +406,60 @@ export class VaultStore {
   private keys(): { root: CryptoKey; workspaceId: string } {
     if (!this.root || !this.workspaceId) throw new Error('Unlock the proof vault first.');
     return { root: this.root, workspaceId: this.workspaceId };
+  }
+  private async previewSchemaMigration(request: Extract<StorageRequest, { type: 'schema-preview' }>) {
+    this.schemaMigration = undefined;
+    const previous = await this.loadDatasetSchema();
+    if (!previous || previous.revision !== request.expectedRevision) throw new Error('Workspace schema changed; reopen before saving.');
+    const schema = validateDatasetMigration(previous, request.schema, request.remaps);
+    const preview: SchemaMigrationPreview = {
+      token: crypto.randomUUID(), schema, discardedCoordinates: 0, affectedAnnotations: 0, images: [],
+    };
+    for (const value of this.db.selectValues('SELECT id FROM workspace_records ORDER BY rowid')) {
+      const record = await this.readWorkspaceRecord(z.uuid().parse(value));
+      const result = applyDatasetMigration(record.document, previous, schema, request.remaps);
+      preview.discardedCoordinates += result.discardedCoordinates;
+      preview.affectedAnnotations += result.affectedAnnotations;
+      if (result.affectedAnnotations) preview.images.push({
+        id: record.document.image.id, name: record.document.image.name,
+        affectedAnnotations: result.affectedAnnotations, discardedCoordinates: result.discardedCoordinates,
+      });
+    }
+    this.schemaMigration = { preview, previous, remaps: structuredClone(request.remaps) };
+    return preview;
+  }
+  private async applySchemaMigration(token: string, confirmDiscard: boolean) {
+    const migration = this.schemaMigration;
+    if (!migration || migration.preview.token !== token) throw new Error('Workspace schema migration preview is stale. Preview again.');
+    const { preview, previous, remaps } = migration;
+    const current = await this.loadDatasetSchema();
+    if (!current || current.revision !== previous.revision) throw new Error('Workspace schema changed; preview again.');
+    if (preview.discardedCoordinates && !confirmDiscard) throw new Error('Workspace migration requires confirmation to discard the previewed point coordinates.');
+    const { root, workspaceId } = this.keys();
+    this.schemaMigration = undefined;
+    this.db.exec('DELETE FROM restore_staging');
+    try {
+      const ids = this.db.selectValues('SELECT id FROM workspace_records ORDER BY rowid').map(value => z.uuid().parse(value));
+      for (const id of ids) {
+        const record = await this.readWorkspaceRecord(id);
+        const result = applyDatasetMigration(record.document, previous, preview.schema, remaps);
+        const document = documentSchema.parse({ ...result.document, revision: record.document.revision + 1 });
+        const bytes = encoder.encode(JSON.stringify(workspaceRecordSchema.parse({ ...record, document })));
+        if (bytes.length > MAX_OBJECT_BYTES) throw new Error('Annotation document exceeds the 8 MiB limit.');
+        const payload = await sealObject(root, workspaceId, id, bytes, 'record');
+        this.db.exec({ sql: 'INSERT INTO restore_staging(id,payload,media_id) VALUES(?,?,?)', bind: [id, payload, record.mediaId] });
+      }
+      const encrypted = await this.sealDatasetSchema(preview.schema);
+      this.db.transaction(() => {
+        this.db.exec('UPDATE workspace_records SET payload=(SELECT payload FROM restore_staging WHERE restore_staging.id=workspace_records.id)');
+        this.db.exec({ sql: 'UPDATE dataset_schema SET payload=? WHERE id=1', bind: [encrypted] });
+        this.db.exec('DELETE FROM restore_staging');
+      });
+      this.datasetSchema = preview.schema;
+      return { ready: true, completed: ids.length, total: ids.length, schema: preview.schema };
+    } finally {
+      this.db.exec('DELETE FROM restore_staging');
+    }
   }
   private schemaProgress() {
     const scan = this.schemaScan;

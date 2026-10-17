@@ -3,7 +3,7 @@ import type { FormEvent, KeyboardEvent, PointerEvent as ReactPointerEvent } from
 import { ImageHistory } from '../domain/history';
 import { documentSchema } from '../domain/model';
 import type { Annotation, AnnotationDocument } from '../domain/model';
-import { applyDatasetSchema } from '../domain/dataset-schema';
+import { applyDatasetSchema, datasetSchemaSchema } from '../domain/dataset-schema';
 import type { DatasetSchema } from '../domain/dataset-schema';
 import { maskIds, paintMask, TILE_SIZE } from '../domain/masks';
 import type { Mask, MaskTile } from '../domain/masks';
@@ -25,13 +25,13 @@ import {
   mediaResultSchema, statusSchema, workspaceDeleteSchema, workspaceImportSchema,
   workspaceExportInfoSchema, workspaceListSchema, workspaceReadSchema, workspaceWriteSchema,
   archiveFinishedSchema, archiveProgressSchema, passphraseChangedSchema,
-  schemaProgressSchema,
+  schemaProgressSchema, schemaMigrationPreviewSchema,
   maskReadSchema, thumbnailSchema, fingerprintSchema,
 } from '../workers/protocol';
-import type { VaultStatus, WorkspaceDescriptor } from '../workers/protocol';
+import type { SchemaMigrationPreview, VaultStatus, WorkspaceDescriptor } from '../workers/protocol';
 import { recoverySecretSchema } from '../crypto/vault';
 
-export type Tool = 'box' | 'polygon' | 'label' | 'keypoints' | 'mask' | 'erase' | 'select' | 'pan';
+export type Tool = 'box' | 'polygon' | 'line' | 'label' | 'keypoints' | 'mask' | 'erase' | 'select' | 'pan';
 interface SizedSanitizedImage { png: ArrayBuffer; width: number; height: number }
 interface WorkspaceProps {
   descriptor: WorkspaceDescriptor;
@@ -70,6 +70,7 @@ const tools: { id: Tool; name: string; shortcut: string; icon: string }[] = [
   { id: 'select', name: 'Select', shortcut: 'V', icon: '↖' },
   { id: 'box', name: 'Box', shortcut: '1', icon: '□' },
   { id: 'polygon', name: 'Polygon', shortcut: '2', icon: '⬡' },
+  { id: 'line', name: 'Line', shortcut: 'L', icon: '／' },
   { id: 'keypoints', name: 'Keypoint', shortcut: '4', icon: '⊙' },
   { id: 'mask', name: 'Brush mask', shortcut: '5', icon: '◉' },
   { id: 'erase', name: 'Erase mask', shortcut: '6', icon: '◌' },
@@ -78,7 +79,8 @@ const tools: { id: Tool; name: string; shortcut: string; icon: string }[] = [
 ];
 const toolHints: Record<Tool, string> = {
   box: 'Drag on the image to draw a box. Switch to Select (V) to move or resize it.',
-  polygon: 'Click to place vertices, then press Enter or Finish polygon. Escape cancels.',
+  polygon: 'Click to place vertices. Click the highlighted first point to close, or press Enter / Finish polygon. Escape cancels.',
+  line: 'Drag between two points to draw a line. Select it to move either endpoint or the whole line.',
   label: 'Choose labels in the right panel to classify this image. Use Detection to draw boxes.',
   keypoints: 'Click to place a point. Add skeleton points in the right panel for landmarks.',
   select: 'Click a shape to select it. Drag to move; drag handles to resize boxes or adjust points.',
@@ -87,7 +89,7 @@ const toolHints: Record<Tool, string> = {
   erase: 'Select a mask in the annotation list, then erase pixels. Empty tiles are removed.',
 };
 const toolGroups: { name: string; tools: Tool[] }[] = [
-  { name: 'Select & draw', tools: ['select', 'box', 'polygon', 'keypoints'] },
+  { name: 'Select & draw', tools: ['select', 'box', 'polygon', 'line', 'keypoints'] },
   { name: 'Pixel masks', tools: ['mask', 'erase'] },
   { name: 'Classify & navigate', tools: ['label', 'pan'] },
 ];
@@ -169,6 +171,16 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
   const [newClass, setNewClass] = useState('');
   const [newPointName, setNewPointName] = useState('');
   const [datasetSchema, setDatasetSchema] = useState<DatasetSchema | null>(null);
+  const [removedClass, setRemovedClass] = useState('');
+  const [replacementClass, setReplacementClass] = useState('');
+  const [renamedClass, setRenamedClass] = useState('');
+  const [classNameDraft, setClassNameDraft] = useState('');
+  const [removedSkeleton, setRemovedSkeleton] = useState('');
+  const [renamedSkeleton, setRenamedSkeleton] = useState('');
+  const [skeletonNameDraft, setSkeletonNameDraft] = useState('');
+  const [pointDrafts, setPointDrafts] = useState<Record<string, string>>({});
+  const [migrationPreview, setMigrationPreview] = useState<SchemaMigrationPreview | null>(null);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [brushRadius, setBrushRadius] = useState(4);
   const [maskUrls, setMaskUrls] = useState<Map<string, string>>(new Map());
@@ -190,7 +202,10 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
   const [rotating, setRotating] = useState(false);
   const [boxStart, setBoxStart] = useState<{ x: number; y: number } | null>(null);
   const [boxEnd, setBoxEnd] = useState<{ x: number; y: number } | null>(null);
-  const [polygon, setPolygon] = useState<{ x: number; y: number }[]>([]);
+  const [lineStart, setLineStart] = useState<Point | null>(null);
+  const [lineEnd, setLineEnd] = useState<Point | null>(null);
+  const [polygon, setPolygon] = useState<Point[]>([]);
+  const [polygonCursor, setPolygonCursor] = useState<Point | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState('');
   const [storageInfo, setStorageInfo] = useState('');
@@ -394,6 +409,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
     setClassId(checked.classes[0]?.id ?? '');
     setSelected(null);
     setPolygon([]);
+    setPolygonCursor(null);
     setShapeDraft(null);
     shapeDrag.current = null;
     panDrag.current = null;
@@ -944,6 +960,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
       type: 'schema-update', expectedRevision: datasetSchema.revision, schema: next,
     }, schemaProgressSchema);
     setDatasetSchema(result.schema);
+    setMigrationPreview(null);
     if (current) {
       const document = applyDatasetSchema(current.document, result.schema);
       history.current = new ImageHistory(document);
@@ -952,11 +969,64 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
     setNotice('Dataset schema saved for every image. Image undo history was reset.');
   }
 
+  async function previewSchemaMigration(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setMigrationPreview(null);
+    setConfirmDiscard(false);
+    await perform(async () => {
+      if (!storage.current || !datasetSchema) throw new Error('Unlock the workspace before changing the dataset schema.');
+      const next: DatasetSchema = {
+        ...datasetSchema, revision: datasetSchema.revision + 1,
+        classes: datasetSchema.classes.filter(item => item.id !== removedClass).map(item =>
+          item.id === renamedClass ? { ...item, name: classNameDraft.trim() } : item),
+        skeletons: datasetSchema.skeletons.filter(item => item.id !== removedSkeleton).map(item => {
+          const points = (pointDrafts[item.id] ?? item.points.join('\n')).split('\n').map(name => name.trim()).filter(Boolean);
+          return { ...item, name: item.id === renamedSkeleton ? skeletonNameDraft.trim() : item.name,
+            points, edges: item.edges.flatMap(([from, to]): [number, number][] => {
+            const a = points.indexOf(item.points[from]!), b = points.indexOf(item.points[to]!);
+            return a >= 0 && b >= 0 ? [[a, b]] : [];
+          }) };
+        }),
+      };
+      if (!datasetSchemaSchema.safeParse(next).success) {
+        throw new Error('Point names must be unique and nonempty, with 1–256 points per skeleton and at most 256 characters per name.');
+      }
+      const preview = await storage.current.request({
+        type: 'schema-preview', expectedRevision: datasetSchema.revision, schema: next,
+        remaps: removedClass && replacementClass ? [{ from: removedClass, to: replacementClass }] : [],
+      }, schemaMigrationPreviewSchema);
+      setMigrationPreview(preview);
+    });
+  }
+
+  async function applySchemaMigration() {
+    await perform(async () => {
+      if (!storage.current || !migrationPreview) return;
+      const result = await storage.current.request({
+        type: 'schema-apply', token: migrationPreview.token, confirmDiscard,
+      }, schemaProgressSchema);
+      setDatasetSchema(result.schema);
+      setMigrationPreview(null); setConfirmDiscard(false);
+      setRemovedClass(''); setReplacementClass(''); setPointDrafts({});
+      setRenamedClass(''); setClassNameDraft('');
+      setRemovedSkeleton(''); setRenamedSkeleton(''); setSkeletonNameDraft('');
+      setClassId(previous => result.schema.classes.some(item => item.id === previous) ? previous : result.schema.classes[0]?.id ?? '');
+      if (current) {
+        const saved = await storage.current.request({ type: 'workspace-read', id: current.document.image.id }, workspaceReadSchema);
+        history.current = new ImageHistory(saved.document);
+        setCurrent(previous => previous ? { ...previous, document: saved.document } : previous);
+      }
+      await refreshIndex();
+      setNotice('Dataset migration saved atomically. No annotations were deleted. Image undo history was reset.');
+    });
+  }
+
   async function addAnnotation(annotation: Annotation) {
     await perform(async () => {
       await edit({ type: 'put', annotation });
       setSelected(annotation.id);
       setPolygon([]);
+      setPolygonCursor(null);
     });
   }
 
@@ -965,8 +1035,11 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
     setStrokePreview([]);
     setTool(next);
     setPolygon([]);
+    setPolygonCursor(null);
     setBoxStart(null);
     setBoxEnd(null);
+    setLineStart(null);
+    setLineEnd(null);
     setShapeDraft(null);
     shapeDrag.current = null;
     panDrag.current = null;
@@ -1015,6 +1088,8 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
     setShapeDraft(null);
     setBoxStart(null);
     setBoxEnd(null);
+    setLineStart(null);
+    setLineEnd(null);
   }
 
   function draggedShape(event: ReactPointerEvent<SVGSVGElement>): Annotation | null {
@@ -1026,10 +1101,17 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
         ['nw', 'ne', 'sw', 'se'].includes(drag.handle)) {
       return resizeBox(annotation, drag.handle as BoxCorner, point, current.document.image.canonical);
     }
-    if (drag.handle?.startsWith('point-') && (annotation.kind === 'polygon' || annotation.kind === 'keypoints')) {
+    if (drag.handle?.startsWith('point-') &&
+        (annotation.kind === 'polygon' || annotation.kind === 'keypoints' || annotation.kind === 'line')) {
       const index = Number(drag.handle.slice(6));
       if (annotation.kind === 'polygon') return {
         ...annotation, points: annotation.points.map((old, i) => i === index ? point : old),
+      };
+      if (annotation.kind === 'line') return {
+        ...annotation, points: [
+          index === 0 ? point : annotation.points[0],
+          index === 1 ? point : annotation.points[1],
+        ],
       };
       return { ...annotation, points: annotation.points.map((old, i) => i === index ? { ...old, ...point } : old) };
     }
@@ -1060,6 +1142,13 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
       if (!matrix) return;
       panDrag.current = { start: pointerPoint(event, current.document, false), x: view.x, y: view.y,
         inverse: matrix.inverse() };
+      event.currentTarget.setPointerCapture(event.pointerId);
+      return;
+    }
+    if (tool === 'line' && classId) {
+      const point = pointerPoint(event, current.document);
+      setLineStart(point);
+      setLineEnd(point);
       event.currentTarget.setPointerCapture(event.pointerId);
       return;
     }
@@ -1100,6 +1189,8 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
       }));
     } else if (shapeDrag.current) setShapeDraft(draggedShape(event));
     else if (boxStart && tool === 'box') setBoxEnd(pointerPoint(event, current.document));
+    else if (lineStart && tool === 'line') setLineEnd(pointerPoint(event, current.document));
+    else if (polygon.length > 0 && tool === 'polygon') setPolygonCursor(pointerPoint(event, current.document));
   }
 
   function onPointerUp(event: ReactPointerEvent<SVGSVGElement>) {
@@ -1116,6 +1207,16 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
       return;
     }
     if (panDrag.current) { panDrag.current = null; return; }
+    if (lineStart && tool === 'line' && current) {
+      const start = lineStart, end = pointerPoint(event, current.document);
+      cancelGesture();
+      if ((Math.abs(end.x - start.x) > 0.01 || Math.abs(end.y - start.y) > 0.01) && classId) {
+        void addAnnotation({
+          id: crypto.randomUUID(), classId, attributes: {}, kind: 'line', points: [start, end],
+        });
+      }
+      return;
+    }
     if (shapeDrag.current) {
       const original = shapeDrag.current.original;
       let changed = draggedShape(event);
@@ -1143,7 +1244,19 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
   function onCanvasClick(event: ReactPointerEvent<SVGSVGElement>) {
     if (!current || busy) return;
     const point = pointerPoint(event, current.document);
-    if (tool === 'polygon') setPolygon(previous => [...previous, point]);
+    if (tool === 'polygon') {
+      if (polygon.length >= 3) {
+        const matrix = event.currentTarget.getScreenCTM();
+        if (!matrix) throw new Error('The image viewport is unavailable.');
+        const first = new DOMPoint(polygon[0]!.x, polygon[0]!.y).matrixTransform(matrix);
+        if (Math.hypot(event.clientX - first.x, event.clientY - first.y) <= 14) {
+          void finishPolygon();
+          return;
+        }
+      }
+      setPolygon(previous => [...previous, point]);
+      setPolygonCursor(point);
+    }
     if (tool === 'keypoints' && classId) {
       const skeleton = current.document.skeletons[0];
       if (!skeleton) return;
@@ -1208,6 +1321,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
       cancelGesture();
       setSelected(null);
       setPolygon([]);
+      setPolygonCursor(null);
     } else if (event.key === 'Enter' && tool === 'polygon' && polygon.length >= 3 &&
         !(event.target instanceof HTMLButtonElement)) {
       event.preventDefault();
@@ -1218,6 +1332,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
     else if (event.key === '4') chooseTool('keypoints');
     else if (event.key === '5') chooseTool('mask');
     else if (event.key === '6') chooseTool('erase');
+    else if (event.key.toLowerCase() === 'l') chooseTool('line');
     else if (event.key.toLowerCase() === 'v') chooseTool('select');
     else if (event.key.toLowerCase() === 'h') chooseTool('pan');
     else if (event.key === '+' || event.key === '=') zoomBy(1.25);
@@ -1356,8 +1471,10 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
     if (running.current) return;
     storage.current?.close(); media.current?.close();
     storage.current = null; media.current = null; history.current = null;
-    cancelGesture(); setPolygon([]); setCurrent(null); setSelected(null);
+    cancelGesture(); setPolygon([]); setPolygonCursor(null); setCurrent(null); setSelected(null);
     maskPixels.current.clear(); setMaskUrls(new Map()); setDatasetSchema(null);
+    setMigrationPreview(null); setConfirmDiscard(false); setPointDrafts({});
+    setRemovedClass(''); setReplacementClass('');
     setThumbnailUrls(new Map());
     setImageIndex([]); setTotal(0); setPassphrase(''); setAttributeText('{}');
     setArchivePassphrase(''); setArchiveConfirmation(''); setVaultSecrets({ current: '', next: '', confirmation: '' });
@@ -1392,7 +1509,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
   ].filter(Boolean).join(' ');
 
   function returnToDataset() {
-    cancelGesture(); setPolygon([]); setCurrent(null); setSelected(null); history.current = null;
+    cancelGesture(); setPolygon([]); setPolygonCursor(null); setCurrent(null); setSelected(null); history.current = null;
     maskPixels.current.clear(); setMaskUrls(new Map());
   }
   function showExport() {
@@ -1409,7 +1526,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
           disabled={busy} onClick={returnToDataset}><span className="step-number" aria-hidden="true">1</span>Dataset</button>
         <span className={current ? 'active project-step' : 'project-step'} aria-current={current ? 'step' : undefined}>
           <span className="step-number" aria-hidden="true">2</span>Annotate</span>
-        <button type="button" className="project-export" aria-label="Export dataset" disabled={busy || total === 0}
+        <button type="button" className="project-export" disabled={busy || total === 0}
           onClick={showExport}><span className="step-number" aria-hidden="true">3</span>Export</button>
       </div>
       <div className="project-nav-utilities">
@@ -1521,7 +1638,11 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
           {tool === 'polygon' && <button type="button" className="tool-button" disabled={busy || polygon.length < 3}
             onClick={() => void finishPolygon()}>Finish polygon</button>}
           {tool === 'polygon' && polygon.length > 0 && <button type="button" className="tool-button"
-            onClick={() => setPolygon(previous => previous.slice(0, -1))}>Remove last vertex</button>}
+            onClick={() => {
+              const next = polygon.slice(0, -1);
+              setPolygon(next);
+              setPolygonCursor(next.at(-1) ?? null);
+            }}>Remove last vertex</button>}
         </div>
         <div className="editor-viewbar">
           <p className="tool-hint" role="status">{toolHints[tool]}</p>
@@ -1563,12 +1684,12 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
               <span className="drawing-tool-group-label">{group.name}</span>
               {group.tools.map(id => {
                 const item = tools.find(candidate => candidate.id === id)!;
-                return <button key={item.id} type="button" aria-label={item.name}
+                return <button key={item.id} type="button"
                   title={`${item.name} (${item.shortcut})`} aria-pressed={tool === item.id} disabled={busy}
                   className={`drawing-tool${tool === item.id ? ' active' : ''}`}
                   onClick={() => chooseTool(item.id)}>
                   <span className="drawing-tool-icon" aria-hidden="true">{item.icon}</span>
-                  <span>{item.name}</span><kbd>{item.shortcut}</kbd>
+                  <span>{item.name}</span><kbd aria-hidden="true">{item.shortcut}</kbd>
                 </button>;
               })}
             </div>)}
@@ -1597,6 +1718,13 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
                   className={`annotation-shape${selectedStyle}`} points={annotation.points.map(point => `${point.x},${point.y}`).join(' ')}
                   fill={color} fillOpacity=".2" stroke={color}
                   strokeWidth="2" vectorEffect="non-scaling-stroke" />;
+                if (annotation.kind === 'line') return <g key={annotation.id} data-annotation-id={annotation.id}>
+                  <line className="annotation-line-hit" x1={annotation.points[0].x} y1={annotation.points[0].y}
+                    x2={annotation.points[1].x} y2={annotation.points[1].y} />
+                  <line className={`annotation-line${selectedStyle}`} x1={annotation.points[0].x} y1={annotation.points[0].y}
+                    x2={annotation.points[1].x} y2={annotation.points[1].y} stroke={color}
+                    strokeWidth="3" vectorEffect="non-scaling-stroke" pointerEvents="none" />
+                </g>;
                 if (annotation.kind === 'mask') return <g key={annotation.id} data-annotation-id={annotation.id}>
                   {annotation.tiles.map(tile => <image key={tile.blobId} className="annotation-mask"
                     href={maskUrls.get(tile.blobId)} x={tile.x} y={tile.y}
@@ -1630,6 +1758,10 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
                 activeShape.points.map((point, index) => 'visibility' in point && point.visibility === 'absent' ? null :
                   <circle key={index} className="edit-handle" data-annotation-id={activeShape.id} data-handle={`point-${index}`}
                     cx={point.x} cy={point.y} r={handleRadius} vectorEffect="non-scaling-stroke" />)}
+              {tool === 'select' && activeShape?.kind === 'line' &&
+                activeShape.points.map((point, index) =>
+                  <circle key={index} className="edit-handle" data-annotation-id={activeShape.id} data-handle={`point-${index}`}
+                    cx={point.x} cy={point.y} r={handleRadius} vectorEffect="non-scaling-stroke" />)}
               </g>
               {strokePreview.length > 0 && <polyline points={strokePreview.map(point => `${point.x},${point.y}`).join(' ')}
                 fill="none" stroke={tool === 'erase' ? '#b84d3b' : '#39764d'} opacity=".5"
@@ -1638,11 +1770,22 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
                 vectorEffect="non-scaling-stroke"
                 x={Math.min(boxStart.x, boxEnd.x)} y={Math.min(boxStart.y, boxEnd.y)}
                 width={Math.abs(boxEnd.x - boxStart.x)} height={Math.abs(boxEnd.y - boxStart.y)} />}
-              {polygon.length > 0 && <polyline className="annotation-draft"
-                vectorEffect="non-scaling-stroke"
-                points={polygon.map(point => `${point.x},${point.y}`).join(' ')} />}
+              {lineStart && lineEnd && <line className="line-draft" x1={lineStart.x} y1={lineStart.y}
+                x2={lineEnd.x} y2={lineEnd.y} vectorEffect="non-scaling-stroke" />}
+              {polygon.length > 0 && polygonCursor && <>
+                {polygon.length >= 3 && <polygon className="polygon-draft-fill"
+                  points={[...polygon, polygonCursor].map(point => `${point.x},${point.y}`).join(' ')} />}
+                <polyline className="annotation-draft" vectorEffect="non-scaling-stroke"
+                  points={[...polygon, polygonCursor].map(point => `${point.x},${point.y}`).join(' ')} />
+                {polygon.length >= 3 && <line className="polygon-draft-close" vectorEffect="non-scaling-stroke"
+                  x1={polygonCursor.x} y1={polygonCursor.y} x2={polygon[0]!.x} y2={polygon[0]!.y} />}
+              </>}
               {polygon.map((point, index) => <circle key={index} cx={point.x} cy={point.y}
-                r={handleRadius / 2} fill="#39764d" pointerEvents="none" />)}
+                className={index === 0 && polygon.length >= 3 ? 'polygon-close-target' : 'polygon-draft-vertex'}
+                r={index === 0 && polygon.length >= 3 ? handleRadius * 0.8 : handleRadius / 2}
+                vectorEffect="non-scaling-stroke" pointerEvents="none">
+                {index === 0 && polygon.length >= 3 && <title>Click this first point to close the polygon</title>}
+              </circle>)}
               </svg>
             </div>
             <div className="image-stepper" aria-label="Image navigation">
@@ -1876,7 +2019,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
         <details className="dataset-schema">
           <summary>Dataset classes and skeletons</summary>
           <div className="workspace-card">
-            <p>Shared by every image, including future imports. Existing named classes and keypoints are kept; destructive schema changes are not available yet.</p>
+            <p>Shared by every image, including future imports. Removing a used class requires a replacement; annotations are never deleted by a schema migration.</p>
             <ul aria-label="Dataset classes">{datasetSchema.classes.map(item => <li key={item.id}>{item.name}</li>)}</ul>
             <form className="add-class-form" onSubmit={event => void addClass(event)}>
               <label htmlFor="dataset-new-class">Add a class</label>
@@ -1890,6 +2033,106 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
                 onChange={event => setNewPointName(event.target.value)} placeholder="Add point name" />
                 <button type="submit" disabled={busy || !newPointName.trim()}>Add</button></div>
             </form>}
+            <form className="workspace-card schema-migration" onSubmit={event => void previewSchemaMigration(event)}>
+              <h3>Migrate dataset schema</h3>
+              <label>Remove class<select aria-label="Remove class" value={removedClass} disabled={busy} onChange={event => {
+                const id = event.target.value;
+                setRemovedClass(id); setReplacementClass('');
+                if (renamedClass === id) { setRenamedClass(''); setClassNameDraft(''); }
+                setMigrationPreview(null);
+              }}>
+                <option value="">Keep all classes</option>
+                {datasetSchema.classes.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+              </select></label>
+              {removedClass && <label>Replacement class<select aria-label="Replacement class" value={replacementClass} disabled={busy} onChange={event => {
+                setReplacementClass(event.target.value); setMigrationPreview(null);
+              }}>
+                <option value="">None — removal allowed only if unused</option>
+                {datasetSchema.classes.filter(item => item.id !== removedClass).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+              </select></label>}
+              <label>Rename class<select aria-label="Rename class" value={renamedClass} disabled={busy}
+                onChange={event => {
+                  const id = event.target.value;
+                  setRenamedClass(id);
+                  setClassNameDraft(datasetSchema.classes.find(item => item.id === id)?.name ?? '');
+                  setMigrationPreview(null);
+                }}>
+                <option value="">Keep class names</option>
+                {datasetSchema.classes.filter(item => item.id !== removedClass).map(item =>
+                  <option key={item.id} value={item.id}>{item.name}</option>)}
+              </select></label>
+              {renamedClass && <label>New class name<input aria-label="New class name" value={classNameDraft}
+                maxLength={256} disabled={busy} onChange={event => {
+                  setClassNameDraft(event.target.value); setMigrationPreview(null);
+                }} /></label>}
+              <label>Remove skeleton<select aria-label="Remove skeleton" value={removedSkeleton} disabled={busy}
+                onChange={event => {
+                  const id = event.target.value;
+                  setRemovedSkeleton(id);
+                  if (renamedSkeleton === id) { setRenamedSkeleton(''); setSkeletonNameDraft(''); }
+                  if (id) setPointDrafts(previous => {
+                    const next = { ...previous }; delete next[id]; return next;
+                  });
+                  setMigrationPreview(null);
+                }}>
+                <option value="">Keep all skeletons</option>
+                {datasetSchema.skeletons.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+              </select></label>
+              <label>Rename skeleton<select aria-label="Rename skeleton" value={renamedSkeleton} disabled={busy}
+                onChange={event => {
+                  const id = event.target.value;
+                  setRenamedSkeleton(id);
+                  setSkeletonNameDraft(datasetSchema.skeletons.find(item => item.id === id)?.name ?? '');
+                  setMigrationPreview(null);
+                }}>
+                <option value="">Keep skeleton names</option>
+                {datasetSchema.skeletons.filter(item => item.id !== removedSkeleton).map(item =>
+                  <option key={item.id} value={item.id}>{item.name}</option>)}
+              </select></label>
+              {renamedSkeleton && <label>New skeleton name<input aria-label="New skeleton name" value={skeletonNameDraft}
+                maxLength={256} disabled={busy} onChange={event => {
+                  setSkeletonNameDraft(event.target.value); setMigrationPreview(null);
+                }} /></label>}
+              <p>One point name per line, in the desired order. Surviving names keep their coordinates. Renaming replaces a point name: its old coordinates are discarded, not transferred. Edges between surviving names are preserved. A skeleton used by keypoint annotations cannot be removed.</p>
+              {datasetSchema.skeletons.map(item => <label key={item.id}>Point names for {item.name}
+                <textarea aria-label={`Point names for ${item.name}`} rows={Math.min(10, item.points.length + 1)}
+                  value={pointDrafts[item.id] ?? item.points.join('\n')} disabled={busy} maxLength={65_792}
+                  onChange={event => { setPointDrafts(previous => ({ ...previous, [item.id]: event.target.value })); setMigrationPreview(null); }} />
+              </label>)}
+              <button type="submit" disabled={busy}>Preview schema migration</button>
+            </form>
+            {migrationPreview && <section aria-label="Schema migration preview" className="workspace-card schema-migration">
+              <h3>Schema migration preview</h3>
+              <ul aria-label="Schema changes">
+                {datasetSchema.classes.flatMap(item => {
+                  const next = migrationPreview.schema.classes.find(candidate => candidate.id === item.id);
+                  return !next ? [`Class "${item.name}" will be removed${replacementClass ? ` and annotations remapped to "${datasetSchema.classes.find(candidate => candidate.id === replacementClass)?.name ?? 'the selected class'}"` : ''}.`]
+                    : next.name !== item.name ? [`Class "${item.name}" will be renamed to "${next.name}".`] : [];
+                }).map(change => <li key={change}>{change}</li>)}
+                {datasetSchema.skeletons.flatMap(item => {
+                  const next = migrationPreview.schema.skeletons.find(candidate => candidate.id === item.id);
+                  if (!next) return [`Skeleton "${item.name}" will be removed.`];
+                  const changes = next.name !== item.name ? [`Skeleton "${item.name}" will be renamed to "${next.name}".`] : [];
+                  if (JSON.stringify(item.points) !== JSON.stringify(next.points)) {
+                    changes.push(`Skeleton "${item.name}" points will be ${next.points.join(' · ')}.`);
+                  }
+                  return changes;
+                }).map(change => <li key={change}>{change}</li>)}
+              </ul>
+              <p>{migrationPreview.discardedCoordinates} point coordinates will be discarded from {migrationPreview.affectedAnnotations} annotations across {migrationPreview.images.length} images. Absent placeholders with zero coordinates are not counted.</p>
+              <ul aria-label="Affected annotation counts">{migrationPreview.images.map(item => <li key={item.id}>
+                {item.name}: {item.affectedAnnotations} annotations, {item.discardedCoordinates} point coordinates
+              </li>)}</ul>
+              {migrationPreview.discardedCoordinates > 0 && <label><input type="checkbox" checked={confirmDiscard} disabled={busy}
+                onChange={event => setConfirmDiscard(event.target.checked)} />I confirm discarding these point coordinates</label>}
+              <button type="button" disabled={busy || (migrationPreview.discardedCoordinates > 0 && !confirmDiscard)}
+                onClick={() => void applySchemaMigration()}>Apply schema migration</button>
+              <button type="button" disabled={busy} onClick={() => void perform(async () => {
+                if (!storage.current) return;
+                await storage.current.request({ type: 'schema-cancel', token: migrationPreview.token }, archiveFinishedSchema);
+                setMigrationPreview(null); setConfirmDiscard(false);
+              })}>Cancel schema migration</button>
+            </section>}
           </div>
         </details>
         {total > 0 && <details className="annotation-import">
@@ -1963,8 +2206,8 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
             <button type="submit" disabled={busy}>Change passphrase</button>
           </form>}
         </details>
-        <div className="workspace-gallery" aria-label="Workspace images">
-          {galleryImages.map(item => <article className="gallery-item" key={item.id}>
+        <div className="workspace-gallery" role="list" aria-label="Workspace images">
+          {galleryImages.map(item => <article className="gallery-item" role="listitem" key={item.id}>
             <button type="button" className="gallery-open" title={item.sourcePath} disabled={busy}
               onClick={() => void perform(() => openImage(item.id))}>
               {thumbnailUrls.has(item.id) && <img className="gallery-thumbnail" src={thumbnailUrls.get(item.id)} alt="" />}

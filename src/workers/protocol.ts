@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { MAX_OBJECT_BYTES, recoverySecretSchema } from '../crypto/vault';
 import { documentSchema } from '../domain/model';
-import { datasetSchemaSchema } from '../domain/dataset-schema';
+import { classRemapsSchema, datasetSchemaSchema } from '../domain/dataset-schema';
 import { maskTileSchema } from '../domain/masks';
 
 const bufferSchema = z.instanceof(ArrayBuffer).refine(b => b.byteLength <= MAX_OBJECT_BYTES, 'Proof object exceeds 8 MiB.');
@@ -27,6 +27,10 @@ export const storageRequestSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('schema-step'), index: z.number().int().nonnegative().max(10_000) }),
   z.strictObject({ type: z.literal('schema-finish') }),
   z.strictObject({ type: z.literal('schema-update'), expectedRevision: z.number().int().nonnegative(), schema: datasetSchemaSchema }),
+  z.strictObject({ type: z.literal('schema-preview'), expectedRevision: z.number().int().nonnegative(),
+    schema: datasetSchemaSchema, remaps: classRemapsSchema }),
+  z.strictObject({ type: z.literal('schema-apply'), token: z.uuid(), confirmDiscard: z.boolean() }),
+  z.strictObject({ type: z.literal('schema-cancel'), token: z.uuid() }),
   z.strictObject({ type: z.literal('status') }),
   z.strictObject({ type: z.literal('create'), passphrase: z.string().min(12).max(1024) }),
   z.strictObject({ type: z.literal('unlock'), passphrase: z.string().min(12).max(1024) }),
@@ -68,6 +72,16 @@ export const schemaProgressSchema = z.strictObject({
   ready: z.boolean(), completed: z.number().int().nonnegative().max(10_000),
   total: z.number().int().nonnegative().max(10_000), schema: datasetSchemaSchema,
 });
+export const schemaMigrationPreviewSchema = z.strictObject({
+  token: z.uuid(), schema: datasetSchemaSchema,
+  discardedCoordinates: z.number().int().nonnegative(),
+  affectedAnnotations: z.number().int().nonnegative(),
+  images: z.array(z.strictObject({
+    id: z.uuid(), name: z.string().min(1).max(256),
+    affectedAnnotations: z.number().int().positive(), discardedCoordinates: z.number().int().nonnegative(),
+  })).max(10_000),
+});
+export type SchemaMigrationPreview = z.infer<typeof schemaMigrationPreviewSchema>;
 export const statusSchema = z.strictObject({
   exists: z.boolean(), unlocked: z.boolean(), ids: z.array(z.uuid()).max(100),
   recovered: z.number().int().nonnegative(), sqlite: z.string(), vfs: z.literal('opfs-sahpool'),

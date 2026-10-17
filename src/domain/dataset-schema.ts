@@ -53,7 +53,9 @@ export function mergeDatasetSchema(
 
 export function applyDatasetSchema(document: AnnotationDocument, schema: DatasetSchema): AnnotationDocument {
   const classes = new Map(schema.classes.map(item => [item.name, item]));
+  const classesById = new Map(schema.classes.map(item => [item.id, item]));
   const skeletons = new Map(schema.skeletons.map(item => [item.name, item]));
+  const skeletonsById = new Map(schema.skeletons.map(item => [item.id, item]));
   const localClasses = new Map(document.classes.map(item => [item.id, item]));
   const localSkeletons = new Map(document.skeletons.map(item => [item.id, item]));
   return documentSchema.parse({
@@ -62,11 +64,11 @@ export function applyDatasetSchema(document: AnnotationDocument, schema: Dataset
     skeletons: schema.skeletons,
     annotations: document.annotations.map(annotation => {
       const localClass = localClasses.get(annotation.classId);
-      const cls = localClass && classes.get(localClass.name);
+      const cls = localClass && (classesById.get(localClass.id) ?? classes.get(localClass.name));
       if (!cls) throw new Error('Workspace schema is missing an annotation class.');
       if (annotation.kind !== 'keypoints') return { ...annotation, classId: cls.id };
       const local = localSkeletons.get(annotation.skeletonId);
-      const skeleton = local && skeletons.get(local.name);
+      const skeleton = local && (skeletonsById.get(local.id) ?? skeletons.get(local.name));
       if (!local || !skeleton) throw new Error('Workspace schema is missing a keypoint skeleton.');
       const points = new Map(local.points.map((name, index) => [name, annotation.points[index]!]));
       return {
@@ -95,4 +97,69 @@ export function extendDatasetSchema(previous: DatasetSchema, input: DatasetSchem
     }
   }
   return next;
+}
+
+export const classRemapsSchema = z.array(z.strictObject({ from: z.uuid(), to: z.uuid() })).max(10_000);
+export type ClassRemaps = z.infer<typeof classRemapsSchema>;
+
+export function validateDatasetMigration(previous: DatasetSchema, input: DatasetSchema, remaps: ClassRemaps): DatasetSchema {
+  const next = datasetSchemaSchema.parse(input);
+  classRemapsSchema.parse(remaps);
+  if (next.revision !== previous.revision + 1) throw new Error('Workspace schema changed; reload before saving.');
+  const removed = previous.classes.filter(item => !next.classes.some(candidate => candidate.id === item.id));
+  if (new Set(remaps.map(item => item.from)).size !== remaps.length || remaps.some(item =>
+    !removed.some(source => source.id === item.from) || !next.classes.some(target => target.id === item.to) ||
+    !previous.classes.some(target => target.id === item.to))) {
+    throw new Error('Workspace class remapping must name distinct removed classes and surviving destination classes.');
+  }
+  for (const item of previous.classes) {
+    const replacement = next.classes.find(candidate => candidate.id === item.id);
+    if (replacement && replacement.exclusiveGroup !== item.exclusiveGroup) {
+      throw new Error('Workspace class exclusive-group changes are not supported by this migration.');
+    }
+  }
+  return next;
+}
+
+export function applyDatasetMigration(
+  document: AnnotationDocument, previous: DatasetSchema, next: DatasetSchema, remaps: ClassRemaps,
+): { document: AnnotationDocument; discardedCoordinates: number; affectedAnnotations: number } {
+  validateDatasetMigration(previous, next, remaps);
+  // Legacy records and imported documents can use different IDs and point orders.
+  const normalized = applyDatasetSchema(document, previous);
+  const destinations = new Map(remaps.map(item => [item.from, item.to]));
+  let discardedCoordinates = 0, affectedAnnotations = 0;
+  const annotations = normalized.annotations.map(annotation => {
+    const classId = destinations.get(annotation.classId) ?? annotation.classId;
+    if (!next.classes.some(item => item.id === classId)) {
+      throw new Error('Workspace class is used by annotations. Choose a surviving replacement class; annotations cannot be deleted by a schema migration.');
+    }
+    let affected = classId !== annotation.classId;
+    if (annotation.kind === 'keypoints') {
+      const before = previous.skeletons.find(item => item.id === annotation.skeletonId)!;
+      const after = next.skeletons.find(item => item.id === annotation.skeletonId);
+      if (!after) throw new Error('A skeleton used by keypoint annotations cannot be removed. Migrate its points or annotations first.');
+      const discarded = before.points.reduce((count, name, index) => {
+        const point = annotation.points[index]!;
+        // Even absent points may carry meaningful imported coordinates.
+        return count + Number(!after.points.includes(name) &&
+          (point.visibility !== 'absent' || point.x !== 0 || point.y !== 0));
+      }, 0);
+      discardedCoordinates += discarded;
+      affected ||= discarded > 0;
+    }
+    if (affected) affectedAnnotations++;
+    return { ...annotation, classId };
+  });
+  let result: AnnotationDocument;
+  try {
+    result = applyDatasetSchema({ ...normalized, annotations }, next);
+  } catch (failure) {
+    if (failure instanceof z.ZodError) {
+      const details = failure.issues.map(issue => issue.message).join(' ');
+      throw new Error(`Workspace migration produced invalid annotations: ${details} Nothing was changed.`);
+    }
+    throw failure;
+  }
+  return { document: result, discardedCoordinates, affectedAnnotations };
 }

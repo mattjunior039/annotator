@@ -51,6 +51,9 @@ export const annotationSchema = z.discriminatedUnion('kind', [
       .refine(isSimpleClockwisePolygon, 'Expected a simple clockwise polygon without collinear vertices.'),
   }),
   z.strictObject({
+    ...common, kind: z.literal('line'), points: z.tuple([pointSchema, pointSchema]),
+  }),
+  z.strictObject({
     ...common, kind: z.literal('mask'), width: dimension, height: dimension,
     tileSize: z.literal(256),
     tiles: z.array(z.strictObject({
@@ -93,6 +96,11 @@ export const documentSchema = z.strictObject({
         break;
       case 'polygon':
         if (!a.points.every(inside)) issue('Polygon outside image.');
+        break;
+      case 'line':
+        if (!a.points.every(inside) || (a.points[0].x === a.points[1].x && a.points[0].y === a.points[1].y)) {
+          issue('Line endpoints must be distinct points inside the image.');
+        }
         break;
       case 'mask': {
         const tiles = new Set(a.tiles.map(t => `${t.x}:${t.y}`));

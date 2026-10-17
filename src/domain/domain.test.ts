@@ -73,6 +73,13 @@ describe('versioned runtime schemas', () => {
     expect(documentSchema.safeParse({ ...doc, skeletons, annotations: [keypoints] }).success).toBe(false);
     expect(documentSchema.safeParse({ ...doc, skeletons, annotations: [{ ...keypoints, points: [{ x: 101, y: 0, visibility: 'absent' }] }] }).success).toBe(true);
   });
+  it('validates line endpoints as distinct points within the image', () => {
+    const doc = document();
+    const line = { id: crypto.randomUUID(), classId, attributes: {}, kind: 'line', points: [{ x: 2, y: 3 }, { x: 80, y: 70 }] };
+    expect(documentSchema.safeParse({ ...doc, annotations: [line] }).success).toBe(true);
+    expect(documentSchema.safeParse({ ...doc, annotations: [{ ...line, points: [{ x: 2, y: 3 }, { x: 2, y: 3 }] }] }).success).toBe(false);
+    expect(documentSchema.safeParse({ ...doc, annotations: [{ ...line, points: [{ x: 101, y: 3 }, { x: 2, y: 3 }] }] }).success).toBe(false);
+  });
   it('rejects duplicate and mutually exclusive image labels', () => {
     const doc = document(), group = crypto.randomUUID(), second = crypto.randomUUID();
     doc.classes = [{ ...doc.classes[0]!, exclusiveGroup: group }, { id: second, name: 'Other', color: '#ffffff', exclusiveGroup: group }];

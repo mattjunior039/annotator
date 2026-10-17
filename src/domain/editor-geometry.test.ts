@@ -28,5 +28,9 @@ describe('editor geometry', () => {
     expect(translateAnnotation(keypoints, { x: 5, y: 5 }, bounds)).toMatchObject({
       points: [{ x: 15, y: 15, visibility: 'visible' }, { x: 0, y: 0, visibility: 'absent' }],
     });
+    const line: Annotation = { ...box, kind: 'line', points: [{ x: 10, y: 20 }, { x: 90, y: 60 }] };
+    expect(translateAnnotation(line, { x: 50, y: 50 }, bounds)).toMatchObject({
+      points: [{ x: 20, y: 40 }, { x: 100, y: 80 }],
+    });
   });
 });

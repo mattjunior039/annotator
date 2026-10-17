@@ -8,8 +8,8 @@ export const exportFormats = [
   { id: 'yolo-seg', name: 'YOLO segmentation', detail: 'Normalized polygon vertices and data.yaml.', kinds: ['polygon'] },
   { id: 'coco', name: 'COCO JSON', detail: 'Boxes, polygons, binary mask RLE, and keypoints, grouped by split. Attributes/review are not training fields.', kinds: ['box', 'polygon', 'mask', 'keypoints'] },
   { id: 'voc', name: 'Pascal VOC XML', detail: 'One XML file per image, with pixel bounding boxes.', kinds: ['box'] },
-  { id: 'csv', name: 'CSV annotations', detail: 'One row per annotation; pixel geometry as JSON. Includes labels and keypoints.', kinds: ['box', 'polygon', 'label', 'keypoints'] },
-  { id: 'native', name: 'Native annotation JSON', detail: 'Versioned per-image documents and mask tile sidecars with classes, skeletons, attributes, and review state. Not an encrypted vault backup.', kinds: ['box', 'polygon', 'label', 'keypoints', 'mask'] },
+  { id: 'csv', name: 'CSV annotations', detail: 'One row per annotation; pixel geometry as JSON. Includes labels, lines, and keypoints.', kinds: ['box', 'polygon', 'line', 'label', 'keypoints'] },
+  { id: 'native', name: 'Native annotation JSON', detail: 'Versioned per-image documents and mask tile sidecars with classes, skeletons, attributes, and review state. Not an encrypted vault backup.', kinds: ['box', 'polygon', 'line', 'label', 'keypoints', 'mask'] },
 ] as const;
 export type ExportFormat = typeof exportFormats[number]['id'];
 
@@ -97,7 +97,7 @@ export function annotationCsv(document: AnnotationDocument, filename: string): s
     if (!name) throw new Error('An annotation references a missing class.');
     const geometry = annotation.kind === 'box'
       ? { x: annotation.x, y: annotation.y, width: annotation.width, height: annotation.height }
-      : annotation.kind === 'polygon' || annotation.kind === 'keypoints' ? { points: annotation.points } : {};
+      : annotation.kind === 'polygon' || annotation.kind === 'line' || annotation.kind === 'keypoints' ? { points: annotation.points } : {};
     const skeleton = annotation.kind === 'keypoints'
       ? document.skeletons.find(item => item.id === annotation.skeletonId) : null;
     return [filename, width, height, annotation.id, name, annotation.kind, JSON.stringify(geometry),

@@ -21,6 +21,8 @@ function fixture(): AnnotationDocument {
       { id: crypto.randomUUID(), classId, kind: 'polygon', attributes: {},
         points: [{ x: 10, y: 10 }, { x: 30, y: 10 }, { x: 20, y: 30 }] },
       { id: crypto.randomUUID(), classId, kind: 'label', attributes: { source: 'human' } },
+      { id: crypto.randomUUID(), classId, kind: 'line', attributes: {},
+        points: [{ x: 2, y: 4 }, { x: 80, y: 60 }] },
       { id: crypto.randomUUID(), classId, kind: 'keypoints', attributes: {}, skeletonId,
         points: [{ x: 10, y: 20, visibility: 'visible' }, { x: 0, y: 0, visibility: 'absent' }] },
     ],
@@ -71,9 +73,10 @@ describe('annotation export formats', () => {
     const result = perImageExport(document, 'native', new Map(), 'sample.png');
     expect(documentSchema.parse(JSON.parse(result.contents))).toEqual(document);
     const csv = annotationCsv(document, 'train/images/sample.png');
-    expect(csv.split('\r\n').filter(Boolean)).toHaveLength(4);
+    expect(csv.split('\r\n').filter(Boolean)).toHaveLength(5);
     expect(csv).toContain('"pill & ""tray"""');
     expect(csv).toContain('"label","{}"');
+    expect(csv).toContain('"line","{""points"":[{""x"":2,""y"":4},{""x"":80,""y"":60}]}"');
     expect(csv).toContain('""visibility"":""absent""');
     expect(csv).toContain('""name"":""pair""');
     expect(csv).toContain('"reviewed"');

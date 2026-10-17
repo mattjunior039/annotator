@@ -456,7 +456,13 @@ test('workspace-first setup supports segmentation edits and reopening saved data
   if (!bounds) throw new Error('Canvas is not visible.');
   const click = async (x: number, y: number) => page.mouse.click(bounds.x + x / 30 * bounds.width, bounds.y + y / 20 * bounds.height);
   await click(4, 4); await click(26, 4); await click(15, 17);
-  await page.getByRole('button', { name: 'Finish polygon' }).click();
+  await expect(canvas.locator('.polygon-draft-fill')).toBeVisible();
+  await expect(canvas.locator('.polygon-draft-close')).toBeVisible();
+  await expect(canvas.locator('.polygon-close-target')).toBeVisible();
+  await click(4, 4);
+  const savedPolygon = canvas.locator('polygon.annotation-shape');
+  await expect(savedPolygon).toHaveCount(1);
+  expect((await savedPolygon.getAttribute('points'))?.trim().split(/\s+/)).toHaveLength(3);
   await expect(page.getByRole('button', { name: 'class_0 · polygon' })).toBeVisible();
   await expect(page.locator('.save-indicator')).toContainText('Saved on this device');
   await page.getByRole('button', { name: 'Exit workspace', exact: true }).click();
@@ -597,6 +603,16 @@ test('large editor draws overlapping boxes, moves and resizes shapes, zooms, pan
     await drag(3, 3, 5, 4);
     const polygon = canvas.locator('polygon.annotation-shape');
     await expect.poll(async () => Number((await polygon.getAttribute('points'))?.split(',')[0])).toBeCloseTo(5, 4);
+    await page.getByRole('button', { name: 'Line', exact: true }).click();
+    await drag(3, 15, 20, 15);
+    await expect(page.getByRole('button', { name: 'class_0 · line', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'class_0 · line', exact: true }).click();
+    const line = canvas.locator('line.annotation-line');
+    await expect(line).toHaveCount(1);
+    await drag(3, 15, 5, 14);
+    await expect.poll(async () => Number(await line.getAttribute('x1'))).toBeCloseTo(5, 4);
+    await drag(12.5, 14.5, 14.5, 15.5);
+    await expect.poll(async () => Number(await line.getAttribute('x1'))).toBeCloseTo(7, 4);
     await expect(page.getByRole('alert')).toHaveCount(0);
     await page.screenshot({ path: 'test-results/editor-desktop.png' });
     await page.setViewportSize({ width: 1184, height: 768 });
@@ -609,7 +625,7 @@ test('large editor draws overlapping boxes, moves and resizes shapes, zooms, pan
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.getByRole('button', { name: 'Dataset', exact: true }).click();
     await expect(page.locator('.gallery-item')).toHaveCount(2);
-    await expect(page.locator('.gallery-item').filter({ hasText: name })).toContainText('4 annotations');
+    await expect(page.locator('.gallery-item').filter({ hasText: name })).toContainText('5 annotations');
   } finally {
     await rm(folder, { recursive: true, force: true });
   }
@@ -644,7 +660,7 @@ test('YOLOv8 folders import existing boxes and export editable dataset files wit
     await page.getByLabel('Add images', { exact: true }).setInputFiles(join(addedFolder, 'images', 'extra.png'));
     await expect(page.locator('.gallery-item')).toHaveCount(3);
 
-    await page.getByRole('button', { name: 'Export dataset', exact: true }).click();
+    await page.getByRole('button', { name: 'Export', exact: true }).click();
     await page.getByRole('button', { name: 'Choose destination & export', exact: true }).click();
     await expect(page.locator('.workspace-notice').filter({ hasText: 'Exported 3 images' })).toBeVisible();
     const exported = await page.evaluate(() =>
@@ -705,7 +721,7 @@ test('all annotation modes save and six export formats honor scope, images, and 
   const files = async () => page.evaluate(() =>
     (window as unknown as { __exportedFiles: Record<string, string | number[]> }).__exportedFiles);
   const exportAs = async (format: string, includeImages: boolean, currentOnly: boolean) => {
-    await page.getByRole('button', { name: 'Export dataset', exact: true }).click();
+    await page.getByRole('button', { name: 'Export', exact: true }).click();
     await page.getByLabel('Export format', { exact: true }).selectOption(format);
     await page.getByLabel('Export scope', { exact: true }).selectOption(currentOnly ? 'current' : 'all');
     await page.getByLabel('Include sanitized PNG images').setChecked(includeImages);
@@ -774,7 +790,7 @@ test('all annotation modes save and six export formats honor scope, images, and 
   expect(document.skeletons[0].points).toEqual(['Point', 'Tip']);
   expect(document.review).toBe('reviewed');
   const countBefore = Object.keys(await files()).length;
-  await page.getByRole('button', { name: 'Export dataset', exact: true }).click();
+  await page.getByRole('button', { name: 'Export', exact: true }).click();
   await page.getByLabel('Export format', { exact: true }).selectOption('yolo');
   await page.getByRole('button', { name: 'Choose destination & export' }).click();
   await expect(page.getByRole('alert')).toContainText('cannot represent label');
@@ -817,6 +833,7 @@ test('dataset classes and skeletons stay shared across images, imports, reloads,
   await page.getByRole('button', { name: 'Cohort', exact: true }).click();
   await page.getByRole('button', { name: 'Keypoint', exact: true }).click();
   const canvas = page.getByRole('img', { name: 'metadata.png annotation canvas', exact: true });
+  await canvas.scrollIntoViewIfNeeded();
   const coordinate = await canvas.evaluate(element => {
     const matrix = (element as SVGSVGElement).getScreenCTM();
     if (!matrix) throw new Error('Canvas transform unavailable.');
@@ -905,6 +922,310 @@ test('dataset classes and skeletons stay shared across images, imports, reloads,
   expect(result.perImage).toMatchObject({ ok: false, error: expect.stringContaining('schema') });
 });
 
+test('destructive schema migrations preview affected records, require point-loss confirmation, and retain annotations', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'New workspace', exact: true }).click();
+  await page.getByLabel('Workspace name', { exact: true }).fill('Schema migration test');
+  await page.getByLabel('Password protect this workspace', { exact: true }).check();
+  await page.getByLabel('Workspace passphrase', { exact: true }).fill(passphrase);
+  await page.getByLabel('Confirm workspace passphrase', { exact: true }).fill(passphrase);
+  await page.getByRole('button', { name: 'Create workspace', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Encrypted backup', exact: true })).toBeEnabled();
+  await page.getByText('Dataset classes and skeletons', { exact: true }).click();
+  await page.getByLabel('Add a class', { exact: true }).fill('Replacement');
+  await page.getByLabel('Add a class', { exact: true }).locator('..').getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('Dataset schema saved');
+  await page.locator('input[aria-label="Add images"]').setInputFiles(fixture('metadata.png'));
+  await expect(page.locator('.workspace-notice').filter({ hasText: 'Import finished' })).toBeVisible();
+  await expect(page.locator('.gallery-item')).toHaveCount(1);
+  await page.locator('.gallery-open').click();
+  await page.getByRole('button', { name: 'Keypoint', exact: true }).click();
+  const canvas = page.getByRole('img', { name: 'metadata.png annotation canvas', exact: true });
+  await canvas.scrollIntoViewIfNeeded();
+  const coordinate = await canvas.evaluate(element => {
+    const matrix = (element as SVGSVGElement).getScreenCTM();
+    if (!matrix) throw new Error('Canvas transform unavailable.');
+    return new DOMPoint(5, 5).matrixTransform(matrix);
+  });
+  await page.mouse.click(coordinate.x, coordinate.y);
+  await expect(canvas.locator('.annotation-point')).toHaveCount(1);
+  await expect(page.locator('.save-indicator')).toContainText('Saved');
+
+  const workerUrl = page.workers().find(worker => worker.url().includes('storage.worker-'))?.url();
+  if (!workerUrl) throw new Error('Storage worker URL unavailable.');
+  const workspaceId = await page.locator('.workspace').getAttribute('data-workspace-id');
+  if (!workspaceId) throw new Error('Workspace ID unavailable.');
+  await page.getByRole('button', { name: 'Dataset', exact: true }).click();
+  await page.getByRole('button', { name: 'Exit workspace', exact: true }).click();
+
+  const result = await page.evaluate(async ({ workerUrl, workspaceId, passphrase }) => {
+    type Schema = {
+      revision: number;
+      classes: { id: string; name: string }[];
+      skeletons: { id: string; name: string; points: string[]; edges: [number, number][] }[];
+    };
+    type Point = { x: number; y: number; visibility: string };
+    type Annotation = { kind: string; classId: string; points?: Point[] };
+    type Document = { annotations: Annotation[] };
+    type Reply = {
+      ok: boolean;
+      error?: string;
+      value?: {
+        schema?: Schema;
+        token?: string;
+        discardedCoordinates?: number;
+        affectedAnnotations?: number;
+        images?: { id: string; name: string; affectedAnnotations: number; discardedCoordinates: number }[];
+        document?: Document;
+      };
+    };
+    const worker = new Worker(workerUrl, { type: 'module' });
+    let id = 0;
+    const request = (payload: Record<string, unknown>) => new Promise<Reply>((resolve, reject) => {
+      worker.onmessage = event => resolve(event.data as Reply);
+      worker.onerror = event => reject(new Error(event.message));
+      worker.postMessage({ version: 1, id: ++id, payload });
+    });
+    const checked = async (payload: Record<string, unknown>) => {
+      const reply = await request(payload);
+      if (!reply.ok) throw new Error(reply.error ?? 'Storage request failed.');
+      return reply.value;
+    };
+    try {
+      for (const payload of [{ type: 'workspace-open', workspaceId }, { type: 'unlock', passphrase }]) {
+        await checked(payload);
+      }
+      const initial = (await checked({ type: 'schema-open' }))?.schema;
+      if (!initial) throw new Error('Expected a dataset schema.');
+      const expanded = structuredClone(initial);
+      expanded.revision++;
+      expanded.skeletons[0]!.points.push('Tip');
+      const added = (await checked({
+        type: 'schema-update', expectedRevision: initial.revision, schema: expanded,
+      }))?.schema;
+      if (!added) throw new Error('Expected the additive schema update.');
+      const removedClass = added.classes.find(item => item.name === 'class_0');
+      const replacement = added.classes.find(item => item.name === 'Replacement');
+      if (!removedClass || !replacement) throw new Error('Expected the source and replacement classes.');
+      const next = structuredClone(added);
+      next.revision++;
+      next.classes = next.classes.filter(item => item.id !== removedClass.id);
+      next.skeletons[0]!.points = ['Tip'];
+      const preview = await checked({
+        type: 'schema-preview', expectedRevision: added.revision, schema: next,
+        remaps: [{ from: removedClass.id, to: replacement.id }],
+      });
+      if (!preview?.token) throw new Error('Expected a migration preview token.');
+      const affectedImage = preview.images?.[0];
+      if (!affectedImage) throw new Error('Expected the affected image in the preview.');
+      const refused = await request({ type: 'schema-apply', token: preview.token, confirmDiscard: false });
+      const unchanged = await checked({ type: 'workspace-read', id: affectedImage.id });
+      const applied = await checked({ type: 'schema-apply', token: preview.token, confirmDiscard: true });
+      const migrated = await checked({ type: 'workspace-read', id: affectedImage.id });
+      return { preview, refused, unchanged, applied, migrated, replacementId: replacement.id };
+    } finally {
+      worker.terminate();
+    }
+  }, { workerUrl, workspaceId, passphrase });
+
+  expect(result.preview).toMatchObject({
+    affectedAnnotations: 1, discardedCoordinates: 1,
+    images: [{ name: 'metadata.png', affectedAnnotations: 1, discardedCoordinates: 1 }],
+  });
+  expect(result.refused).toMatchObject({ ok: false, error: expect.stringContaining('requires confirmation') });
+  expect(result.unchanged?.document?.annotations).toHaveLength(1);
+  expect(result.applied).toMatchObject({
+    ready: true, schema: { classes: [{ name: 'Replacement' }], skeletons: [{ points: ['Tip'] }] },
+  });
+  expect(result.migrated?.document?.annotations).toHaveLength(1);
+  expect(result.migrated?.document?.annotations[0]).toMatchObject({
+    kind: 'keypoints', classId: result.replacementId,
+    points: [{ x: 0, y: 0, visibility: 'absent' }],
+  });
+});
+
+test('schema migrations rename used classes and skeletons, and remove unused skeletons without data loss', async ({ page }) => {
+  await page.goto('/');
+  await enterEmptyWorkspace(page);
+  await page.getByLabel('Add images', { exact: true }).setInputFiles(fixture('metadata.png'));
+  await page.locator('.gallery-open').click();
+  await page.getByRole('button', { name: 'Image labels', exact: true }).click();
+  await page.getByRole('button', { name: 'class_0', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'class_0 · label', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Dataset', exact: true }).click();
+  await page.getByText('Dataset classes and skeletons', { exact: true }).click();
+  await page.getByLabel('Rename class', { exact: true }).selectOption({ label: 'class_0' });
+  await page.getByLabel('New class name', { exact: true }).fill('Vehicle');
+  await page.getByLabel('Rename skeleton', { exact: true }).selectOption({ label: 'Point' });
+  await page.getByLabel('New skeleton name', { exact: true }).fill('Landmarks');
+  await page.getByRole('button', { name: 'Preview schema migration', exact: true }).click();
+  await expect(page.getByRole('list', { name: 'Schema changes' })).toContainText('Class "class_0" will be renamed to "Vehicle".');
+  await expect(page.getByRole('list', { name: 'Schema changes' })).toContainText('Skeleton "Point" will be renamed to "Landmarks".');
+  await page.getByRole('button', { name: 'Apply schema migration', exact: true }).click();
+  await page.getByLabel('Remove skeleton', { exact: true }).selectOption({ label: 'Landmarks' });
+  await page.getByRole('button', { name: 'Preview schema migration', exact: true }).click();
+  await expect(page.getByRole('list', { name: 'Schema changes' })).toContainText('Skeleton "Landmarks" will be removed.');
+  await page.getByRole('button', { name: 'Apply schema migration', exact: true }).click();
+  await expect(page.getByRole('list', { name: 'Dataset classes' })).toContainText('Vehicle');
+  await page.locator('.gallery-open').click();
+  await expect(page.getByRole('button', { name: 'Vehicle · label', exact: true })).toBeVisible();
+});
+
+test('schema migrations count coordinate loss, require only discard confirmation, and preserve surviving annotations', async ({ page }) => {
+  await page.goto('/');
+  await enterEmptyWorkspace(page);
+  await page.getByText('Dataset classes and skeletons', { exact: true }).click();
+  const schemaDetails = page.locator('details.dataset-schema');
+  const openSchema = async () => {
+    if (!(await schemaDetails.evaluate(element => (element as HTMLDetailsElement).open))) {
+      await schemaDetails.locator('summary').click();
+    }
+  };
+  for (const name of ['Unused', 'Source', 'Target']) {
+    await page.getByLabel('Add a class', { exact: true }).fill(name);
+    await page.getByLabel('Add a class', { exact: true }).locator('..').getByRole('button', { name: 'Add', exact: true }).click();
+    await expect(page.getByRole('list', { name: 'Dataset classes' })).toContainText(name);
+  }
+  await page.getByLabel('Add images', { exact: true }).setInputFiles([fixture('metadata.png'), fixture('metadata.webp')]);
+  await expect(page.locator('.gallery-item')).toHaveCount(2);
+  await page.getByPlaceholder('Add point name').fill('Tip');
+  await page.getByPlaceholder('Add point name').locator('..').getByRole('button', { name: 'Add', exact: true }).click();
+  const placed: Record<string, { x: number; y: number }[]> = {};
+  for (const name of ['metadata.png', 'metadata.webp']) {
+    await page.locator('.gallery-open').filter({ hasText: name }).click();
+    await page.getByRole('button', { name: 'Keypoint', exact: true }).click();
+    await page.getByRole('combobox', { name: 'Active class' }).selectOption({ label: 'Source' });
+    const canvas = page.getByRole('img', { name: `${name} annotation canvas`, exact: true });
+    await canvas.scrollIntoViewIfNeeded();
+    for (const value of [5, 8]) {
+      const coordinate = await canvas.evaluate((element, value) => {
+        const matrix = (element as SVGSVGElement).getScreenCTM()!;
+        const point = new DOMPoint(value, value).matrixTransform(matrix);
+        return { x: point.x, y: point.y };
+      }, value);
+      await page.mouse.click(coordinate.x, coordinate.y);
+      await expect(page.locator('.save-indicator')).toContainText('Saved');
+    }
+    await expect(canvas.locator('.annotation-point')).toHaveCount(2);
+    placed[name] = await canvas.locator('.annotation-point').evaluateAll(points => points.map(point => ({
+      x: Number(point.getAttribute('cx')), y: Number(point.getAttribute('cy')),
+    })));
+    await page.getByRole('button', { name: 'Dataset', exact: true }).click();
+  }
+  const preview = page.getByRole('region', { name: 'Schema migration preview', exact: true });
+  const previewButton = page.getByRole('button', { name: 'Preview schema migration', exact: true });
+  const applyButton = page.getByRole('button', { name: 'Apply schema migration', exact: true });
+  await openSchema();
+  await page.getByLabel('Remove class', { exact: true }).selectOption({ label: 'Unused' });
+  await previewButton.click();
+  await expect(preview).toContainText('0 point coordinates will be discarded from 0 annotations');
+  await expect(preview.getByRole('checkbox')).toHaveCount(0);
+  await applyButton.click();
+  await expect(page.getByRole('list', { name: 'Dataset classes' })).not.toContainText('Unused');
+  await openSchema();
+  await page.getByLabel('Remove class', { exact: true }).selectOption({ label: 'Source' });
+  await previewButton.click();
+  await expect(page.getByRole('alert')).toContainText('Choose a surviving replacement class');
+  await expect(preview).toHaveCount(0);
+  await openSchema();
+  await page.getByLabel('Replacement class', { exact: true }).selectOption({ label: 'Target' });
+  await previewButton.click();
+  await expect(preview.getByRole('checkbox')).toHaveCount(0);
+  await applyButton.click();
+  await expect(page.getByRole('list', { name: 'Dataset classes' })).not.toContainText('Source');
+  await openSchema();
+  await page.getByLabel('Point names for Point', { exact: true }).fill('Tip\nPoint');
+  await previewButton.click();
+  await expect(preview).toContainText('0 point coordinates');
+  await applyButton.click();
+  await openSchema();
+  await expect(page.getByLabel('Point names for Point', { exact: true })).toHaveValue('Tip\nPoint');
+  await page.locator('.gallery-open').filter({ hasText: 'metadata.png' }).click();
+  const canvas = page.getByRole('img', { name: 'metadata.png annotation canvas', exact: true });
+  await expect.poll(() => canvas.locator('.annotation-point').evaluateAll(points => points.map(point => ({
+    x: Number(point.getAttribute('cx')), y: Number(point.getAttribute('cy')),
+  })))).toEqual([...placed['metadata.png']!].reverse());
+  await page.getByRole('button', { name: 'Dataset', exact: true }).click();
+  await openSchema();
+  await page.getByLabel('Point names for Point', { exact: true }).fill('Tip\nRenamed');
+  await previewButton.click();
+  await expect(preview).toContainText('2 point coordinates will be discarded from 2 annotations across 2 images');
+  await expect(page.getByRole('list', { name: 'Affected annotation counts' })).toContainText('metadata.png: 1 annotations, 1 point coordinates');
+  await expect(page.getByRole('list', { name: 'Affected annotation counts' })).toContainText('metadata.webp: 1 annotations, 1 point coordinates');
+  await expect(applyButton).toBeDisabled();
+  await page.getByRole('button', { name: 'Cancel schema migration', exact: true }).click();
+  await expect(preview).toHaveCount(0);
+  await expect(page.getByText('Skeleton points: Tip · Point', { exact: true })).toBeVisible();
+  await previewButton.click();
+  await page.getByRole('checkbox', { name: 'I confirm discarding these point coordinates', exact: true }).check();
+  await applyButton.click();
+  await expect(page.getByText('Skeleton points: Tip · Renamed', { exact: true })).toBeVisible();
+  await page.reload();
+  await enterEmptyWorkspace(page);
+  await expect(page.locator('.gallery-item')).toHaveCount(2);
+  const workerUrl = page.workers().find(worker => worker.url().includes('storage.worker-'))!.url();
+  const workspaceId = await page.locator('.workspace').getAttribute('data-workspace-id');
+  await page.getByRole('button', { name: 'Exit workspace', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'New workspace', exact: true })).toBeEnabled();
+  const result = await page.evaluate(async ({ workerUrl, workspaceId, passphrase }) => {
+    type Schema = import('../../src/domain/dataset-schema').DatasetSchema;
+    type Document = import('../../src/domain/model').AnnotationDocument;
+    type Preview = import('../../src/workers/protocol').SchemaMigrationPreview;
+    type Reply = { ok: boolean; error?: string; value?: { schema?: Schema; items?: { document: Document }[] } & Partial<Preview> };
+    const worker = new Worker(workerUrl, { type: 'module' });
+    let id = 0;
+    const request = (payload: Record<string, unknown>) => new Promise<Reply>((resolve, reject) => {
+      worker.onmessage = event => resolve(event.data);
+      worker.onerror = event => reject(new Error(event.message));
+      worker.postMessage({ version: 1, id: ++id, payload });
+    });
+    try {
+      for (const payload of [{ type: 'workspace-open', workspaceId }, { type: 'unlock', passphrase }]) {
+        const reply = await request(payload);
+        if (!reply.ok) throw new Error(reply.error);
+      }
+      const schema = (await request({ type: 'schema-open' })).value!.schema!;
+      const documents = (await request({ type: 'workspace-export-info', offset: 0, limit: 100 })).value!.items!.map(item => item.document);
+      const next = structuredClone(schema);
+      next.revision++; next.skeletons[0]!.points = ['Renamed']; next.skeletons[0]!.edges = [];
+      const plan = { type: 'schema-preview', expectedRevision: schema.revision, schema: next, remaps: [] };
+      const staleRevision = await request({ ...plan, expectedRevision: schema.revision - 1 });
+      const token = (await request(plan)).value!.token!;
+      const unconfirmed = await request({ type: 'schema-apply', token, confirmDiscard: false });
+      await request({ type: 'schema-cancel', token });
+      const cancelled = await request({ type: 'schema-apply', token, confirmDiscard: true });
+      const changedToken = (await request(plan)).value!.token!;
+      const changed = structuredClone(documents[0]!); changed.revision++;
+      const write = await request({ type: 'workspace-update', id: changed.image.id, expectedRevision: changed.revision - 1, document: changed });
+      if (!write.ok) throw new Error(write.error);
+      const staleImage = await request({ type: 'schema-apply', token: changedToken, confirmDiscard: true });
+      const beforeFinal = (await request({ type: 'workspace-export-info', offset: 0, limit: 100 })).value!.items!;
+      const finalPreview = (await request(plan)).value!;
+      const applied = await request({ type: 'schema-apply', token: finalPreview.token, confirmDiscard: true });
+      const repeated = await request({ type: 'schema-apply', token: finalPreview.token, confirmDiscard: true });
+      const final = (await request({ type: 'workspace-export-info', offset: 0, limit: 100 })).value!.items!;
+      const staleWrite = await request({ type: 'workspace-update', id: changed.image.id, expectedRevision: changed.revision, document: { ...changed, revision: changed.revision + 1 } });
+      return { schema, documents, staleRevision, unconfirmed, cancelled, staleImage, beforeFinal, applied, repeated, final, staleWrite };
+    } finally { worker.terminate(); }
+  }, { workerUrl, workspaceId, passphrase });
+  for (const document of result.documents) {
+    expect(document.annotations).toHaveLength(1);
+    expect(document.annotations[0]).toMatchObject({
+      classId: result.schema.classes.find(item => item.name === 'Target')!.id,
+      points: [{ ...placed[document.image.name]![1], visibility: 'visible' }, { x: 0, y: 0, visibility: 'absent' }],
+    });
+  }
+  expect(result.staleRevision).toMatchObject({ ok: false, error: expect.stringContaining('schema changed') });
+  expect(result.unconfirmed).toMatchObject({ ok: false, error: expect.stringContaining('confirmation') });
+  expect(result.cancelled).toMatchObject({ ok: false, error: expect.stringContaining('stale') });
+  expect(result.staleImage).toMatchObject({ ok: false, error: expect.stringContaining('stale') });
+  expect(result.beforeFinal.map(item => item.document.annotations)).toEqual(result.documents.map(item => item.annotations));
+  expect(result.applied.ok).toBe(true);
+  expect(result.repeated).toMatchObject({ ok: false, error: expect.stringContaining('stale') });
+  expect(result.staleWrite.ok).toBe(false);
+  for (const item of result.final) expect(item.document.annotations).toHaveLength(1);
+});
+
 test('encrypted backup restores shared definitions from an empty dataset without creating images', async ({ page }) => {
   await mockBackupPicker(page);
   await page.goto('/');
@@ -943,7 +1264,8 @@ test('binary mask brush and erase preserve exact pixels through undo, reload, na
   await page.getByLabel('Add images', { exact: true }).setInputFiles(fixture('metadata.png'));
   await page.locator('.gallery-open').click();
   const canvas = page.getByRole('img', { name: 'metadata.png annotation canvas', exact: true });
-  const stroke = async () => {
+  const stroke = async (expectedMaskCount: number) => {
+    await canvas.scrollIntoViewIfNeeded();
     const coordinates = await canvas.evaluate(element => {
       const matrix = (element as SVGSVGElement).getScreenCTM();
       if (!matrix) throw new Error('Canvas unavailable.');
@@ -953,12 +1275,11 @@ test('binary mask brush and erase preserve exact pixels through undo, reload, na
     });
     await page.mouse.move(coordinates[0]!.x, coordinates[0]!.y); await page.mouse.down();
     await page.mouse.move(coordinates[1]!.x, coordinates[1]!.y, { steps: 4 }); await page.mouse.up();
-    await expect(page.locator('.save-indicator')).toContainText('Saved on this device');
+    await expect(canvas.locator('.annotation-mask')).toHaveCount(expectedMaskCount);
   };
   await page.getByRole('button', { name: 'Brush mask', exact: true }).click();
   await page.getByLabel('Brush radius', { exact: true }).fill('2');
-  await stroke();
-  await expect(canvas.locator('.annotation-mask')).toHaveCount(1);
+  await stroke(1);
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
   await expect(canvas.locator('.annotation-mask')).toHaveCount(0);
   await page.getByRole('button', { name: 'Redo', exact: true }).click();
@@ -979,7 +1300,7 @@ test('binary mask brush and erase preserve exact pixels through undo, reload, na
   await page.getByLabel('Lock annotation', { exact: true }).click();
   await expect(page.getByRole('button', { name: 'Delete selected annotation', exact: true })).toBeEnabled();
   const exportAs = async (format: string) => {
-    await page.getByRole('button', { name: 'Export dataset', exact: true }).click();
+    await page.getByRole('button', { name: 'Export', exact: true }).click();
     await page.getByLabel('Export format', { exact: true }).selectOption(format);
     await page.getByLabel('Include sanitized PNG images').uncheck();
     await page.getByRole('button', { name: 'Choose destination & export' }).click();
@@ -997,8 +1318,9 @@ test('binary mask brush and erase preserve exact pixels through undo, reload, na
   const json = JSON.parse(String(Object.entries(coco).find(([name]) => name.endsWith('_annotations.coco.json'))![1]));
   expect(json.annotations[0].area).toBe(area);
   expect(json.annotations[0].segmentation.counts.reduce((a: number, b: number) => a + b, 0)).toBe(600);
+  await page.getByRole('button', { name: 'class_0 · mask', exact: true }).click();
   await page.getByRole('button', { name: 'Erase mask', exact: true }).click();
-  await stroke();
+  await stroke(0);
   await expect(canvas.locator('.annotation-mask')).toHaveCount(0);
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
   await expect(canvas.locator('.annotation-mask')).toHaveCount(1);
@@ -1042,7 +1364,7 @@ test('staged annotation imports roll back on a later invalid image and publish v
   await enterEmptyWorkspace(page);
   await page.getByLabel('Add images', { exact: true }).setInputFiles([fixture('metadata.png'), fixture('metadata.webp')]);
   await expect(page.locator('.gallery-item')).toHaveCount(2);
-  await page.getByRole('button', { name: 'Export dataset', exact: true }).click();
+  await page.getByRole('button', { name: 'Export', exact: true }).click();
   await page.getByLabel('Export format', { exact: true }).selectOption('native');
   await page.getByRole('button', { name: 'Choose destination & export', exact: true }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();
@@ -1422,7 +1744,8 @@ test('offline app-shell installation supports offline unlock without caching wor
   await page.getByRole('button', { name: 'class_0', exact: true }).click();
   await expect(page.getByRole('button', { name: 'class_0 · label', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Keypoint', exact: true }).click();
-  await page.mouse.click(second.x, second.y);
+  const keypoint = await point(12, 12);
+  await page.mouse.click(keypoint.x, keypoint.y);
   await expect(canvas.locator('.annotation-point')).toHaveCount(1);
   await expect(page.getByRole('button', { name: 'Brush mask', exact: true })).toBeEnabled();
   await page.keyboard.press('5');
@@ -1445,7 +1768,7 @@ test('offline app-shell installation supports offline unlock without caching wor
   await expect(canvas.locator('.annotation-shape')).toHaveCount(2);
   await expect(canvas.locator('.annotation-mask')).toHaveCount(1);
   await expect(canvas.locator('.annotation-point')).toHaveCount(1);
-  await page.getByRole('button', { name: 'Export dataset', exact: true }).click();
+  await page.getByRole('button', { name: 'Export', exact: true }).click();
   await page.getByLabel('Export format', { exact: true }).selectOption('native');
   await page.getByRole('button', { name: 'Choose destination & export', exact: true }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible();
@@ -1807,6 +2130,10 @@ test('every EXIF orientation is applied and identifying metadata is absent in ou
     expect(metadata.xmp).toBeUndefined();
     expect(metadata.iptc).toBeUndefined();
     expect(metadata.icc).toBeUndefined();
+    const decoded = await sharp(output).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const outputTopLeft = decoded.data.subarray(5 * decoded.info.width * 4 + 5 * 4, 5 * decoded.info.width * 4 + 5 * 4 + 3);
+    outputTopLeft.forEach((value, channel) =>
+      expect(Math.abs(value - topLeftColors[orientation - 1]![channel]!)).toBeLessThan(6));
     expect(Buffer.from(output).toString('latin1')).not.toContain('CANARY');
   }
 });
@@ -1822,6 +2149,17 @@ test('PNG/WebP metadata and alpha are sanitized; uncertified inputs fail explici
     const output = await downloadPng(page), metadata = await sharp(output).metadata();
     expect(metadata.exif).toBeUndefined(); expect(metadata.icc).toBeUndefined();
     expect(output.toString('latin1')).not.toContain('CANARY');
+    if (name === 'metadata.png' || name === 'metadata.webp' || name === 'alpha.png') {
+      const decoded = await sharp(output).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      const sample = (x: number, y: number) => Array.from(
+        decoded.data.subarray((y * decoded.info.width + x) * 4, (y * decoded.info.width + x) * 4 + 4),
+      );
+      expect(sample(5, 5)).toEqual(name === 'alpha.png' ? [240, 20, 10, 155] : [240, 20, 10, 255]);
+      if (name !== 'alpha.png') {
+        expect(sample(15, 5)).toEqual([10, 220, 30, 255]);
+        expect(sample(25, 15)).toEqual([10, 220, 230, 255]);
+      }
+    }
   }
   for (const [name, error] of [
     ['icc.png', 'ICC-profiled'], ['sixteen-bit.png', '16-bit'],

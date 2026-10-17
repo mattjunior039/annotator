@@ -8,7 +8,7 @@ type Box = Extract<Annotation, { kind: 'box' }>;
 export function translateAnnotation(annotation: Annotation, delta: Point, bounds: Bounds): Annotation {
   const points = annotation.kind === 'box'
     ? [annotation, { x: annotation.x + annotation.width, y: annotation.y + annotation.height }]
-    : annotation.kind === 'polygon' ? annotation.points
+    : annotation.kind === 'polygon' || annotation.kind === 'line' ? annotation.points
     : annotation.kind === 'keypoints' ? annotation.points.filter(point => point.visibility !== 'absent')
     : [];
   if (!points.length) return annotation;
@@ -19,6 +19,12 @@ export function translateAnnotation(annotation: Annotation, delta: Point, bounds
   if (annotation.kind === 'box') return { ...annotation, x: annotation.x + dx, y: annotation.y + dy };
   if (annotation.kind === 'polygon') return {
     ...annotation, points: annotation.points.map(point => ({ x: point.x + dx, y: point.y + dy })),
+  };
+  if (annotation.kind === 'line') return {
+    ...annotation, points: [
+      { x: annotation.points[0].x + dx, y: annotation.points[0].y + dy },
+      { x: annotation.points[1].x + dx, y: annotation.points[1].y + dy },
+    ],
   };
   if (annotation.kind === 'keypoints') return {
     ...annotation, points: annotation.points.map(point => point.visibility === 'absent'

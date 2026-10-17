@@ -138,8 +138,8 @@ export function App() {
             <li><span className="step-number" aria-hidden="true">3</span><div><strong>Annotate, then export</strong><small>Use boxes, polygons, keypoints, masks, or image labels.</small></div></li>
           </ol>
         </div>}
-        <div className="workspace-grid" aria-label="Your workspaces">
-          {workspaces.map(item => <div className="workspace-entry" key={item.id}><button className="workspace-tile" type="button" disabled={busy || labOpen || item.deleting}
+        <div className="workspace-grid" role="list" aria-label="Your workspaces">
+          {workspaces.map(item => <div className="workspace-entry" role="listitem" key={item.id}><button className="workspace-tile" type="button" disabled={busy || labOpen || item.deleting}
             onClick={() => { setCreating(false); setDeleting(null); resetForm(); setActive(item); }}>
             <span className="workspace-tile-name">{item.name}</span>
             <span>{item.passwordProtected ? 'Password protected' : 'No password · this device'}</span>
