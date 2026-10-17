@@ -86,6 +86,11 @@ const toolHints: Record<Tool, string> = {
   mask: 'Paint a binary pixel mask. Select an existing mask to extend it; otherwise a new instance is created.',
   erase: 'Select a mask in the annotation list, then erase pixels. Empty tiles are removed.',
 };
+const toolGroups: { name: string; tools: Tool[] }[] = [
+  { name: 'Select & draw', tools: ['select', 'box', 'polygon', 'keypoints'] },
+  { name: 'Pixel masks', tools: ['mask', 'erase'] },
+  { name: 'Classify & navigate', tools: ['label', 'pan'] },
+];
 interface ShapeDrag {
   original: Annotation;
   start: Point;
@@ -158,6 +163,8 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
   const [total, setTotal] = useState(0);
   const [current, setCurrent] = useState<OpenImage | null>(null);
   const [tool, setTool] = useState<Tool>(initialTool);
+  const [imagesPanelOpen, setImagesPanelOpen] = useState(true);
+  const [inspectorOpen, setInspectorOpen] = useState(true);
   const [classId, setClassId] = useState('');
   const [newClass, setNewClass] = useState('');
   const [newPointName, setNewPointName] = useState('');
@@ -1378,6 +1385,11 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
   const editorResultsPage = Math.min(editorSearchPage, Math.max(0, Math.ceil(editorMatches.length / 100) - 1));
   const editorStart = search ? editorResultsPage * 100 : Math.floor(Math.max(0, editorMatches.findIndex(item => item.id === current?.document.image.id)) / 100) * 100;
   const activeTool = tools.find(item => item.id === tool)!;
+  const editorLayoutClass = [
+    'editor-layout',
+    !imagesPanelOpen && 'images-collapsed',
+    !inspectorOpen && 'inspector-collapsed',
+  ].filter(Boolean).join(' ');
 
   function returnToDataset() {
     cancelGesture(); setPolygon([]); setCurrent(null); setSelected(null); history.current = null;
@@ -1392,22 +1404,30 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
   return <section ref={workspace} data-workspace-id={descriptor.id} tabIndex={-1} className={`workspace${current ? ' is-editing' : ''}`} onKeyDown={handleKeys}>
     {vault?.unlocked && datasetSchema && <nav className="project-nav" aria-label="Workspace sections">
       <span className="project-name">{descriptor.name}</span>
-      <button type="button" className={!current ? 'active' : ''} aria-current={!current ? 'page' : undefined}
-        disabled={busy} onClick={returnToDataset}>Dataset</button>
-      <span className={current ? 'active project-step' : 'project-step'}>Annotate</span>
-      <button type="button" disabled={busy || total === 0} onClick={showExport}>Export dataset</button>
-      <button type="button" disabled={busy} aria-expanded={sharingOpen} onClick={() => setSharingOpen(previous => !previous)}>Sharing</button>
-      {!current && <button type="button" disabled={busy} onClick={() => {
-        setError(''); setArchivePassphrase(''); setArchiveConfirmation(''); setArchiveMode('backup');
-      }}>Encrypted backup</button>}
-      {!current && <button type="button" disabled={busy || total !== 0} title="Restore into an empty workspace; existing images are never overwritten." onClick={() => {
-        setError(''); setArchivePassphrase(''); setArchiveConfirmation(''); setArchiveMode('restore');
-      }}>Restore backup</button>}
+      <div className="project-steps" aria-label="Project workflow">
+        <button type="button" className={!current ? 'active' : ''} aria-current={!current ? 'step' : undefined}
+          disabled={busy} onClick={returnToDataset}><span className="step-number" aria-hidden="true">1</span>Dataset</button>
+        <span className={current ? 'active project-step' : 'project-step'} aria-current={current ? 'step' : undefined}>
+          <span className="step-number" aria-hidden="true">2</span>Annotate</span>
+        <button type="button" className="project-export" aria-label="Export dataset" disabled={busy || total === 0}
+          onClick={showExport}><span className="step-number" aria-hidden="true">3</span>Export</button>
+      </div>
+      <div className="project-nav-utilities">
+        <button type="button" disabled={busy} aria-expanded={sharingOpen} onClick={() => setSharingOpen(previous => !previous)}>Sharing</button>
+        {!current && <button type="button" disabled={busy} onClick={() => {
+          setError(''); setArchivePassphrase(''); setArchiveConfirmation(''); setArchiveMode('backup');
+        }}>Encrypted backup</button>}
+        {!current && <button type="button" disabled={busy || total !== 0} title="Restore into an empty workspace; existing images are never overwritten." onClick={() => {
+          setError(''); setArchivePassphrase(''); setArchiveConfirmation(''); setArchiveMode('restore');
+        }}>Restore backup</button>}
+      </div>
     </nav>}
     <div className="workspace-heading">
       <div>
         <h1>{current ? current.document.image.name : descriptor.name}</h1>
-        <p>{descriptor.passwordProtected ? 'Password protected · stored on this device' : 'No password · accessible to this browser profile'}</p>
+        <p>{current
+          ? `${current.document.annotations.length} annotations · ${current.document.review.replace('_', ' ')}`
+          : descriptor.passwordProtected ? 'Password protected · stored on this device' : 'No password · accessible to this browser profile'}</p>
       </div>
       <div className="workspace-heading-actions">
         {vault?.unlocked && descriptor.passwordProtected && <button type="button" className="text-button" disabled={busy}
@@ -1486,6 +1506,14 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
       {current ? <>
         <div className="editor-toolbar" role="toolbar" aria-label="Edit actions">
           <strong>{activeTool.name}</strong>
+          <div className="editor-panel-toggles" aria-label="Editor panels">
+            <button type="button" className={`tool-button${imagesPanelOpen ? ' active' : ''}`}
+              aria-label="Images panel" aria-expanded={imagesPanelOpen} aria-controls="editor-images-panel"
+              onClick={() => setImagesPanelOpen(open => !open)}>Images</button>
+            <button type="button" className={`tool-button${inspectorOpen ? ' active' : ''}`}
+              aria-label="Properties panel" aria-expanded={inspectorOpen} aria-controls="editor-inspector-panel"
+              onClick={() => setInspectorOpen(open => !open)}>Properties</button>
+          </div>
           <button type="button" className="tool-button" disabled={busy || !history.current?.canUndo}
             onClick={() => void perform(() => undoRedo('undo'))}>Undo</button>
           <button type="button" className="tool-button" disabled={busy || !history.current?.canRedo}
@@ -1506,16 +1534,9 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
             <button type="button" className="tool-button" onClick={() => setView({ zoom: 1, x: 0, y: 0 })}>Fit image</button>
           </div>
         </div>
-        <div className="editor-layout">
-          <nav className="image-sidebar" aria-label="Dataset image navigation">
+        <div className={editorLayoutClass}>
+          <nav id="editor-images-panel" className="image-sidebar" aria-label="Dataset image navigation" hidden={!imagesPanelOpen}>
             <div className="list-heading"><strong>Images</strong><span>{total}</span></div>
-            <div className="image-navigation">
-              <button type="button" className="tool-button" disabled={busy || imagePosition <= 0}
-                aria-label="Previous image" onClick={() => void navigateImage(-1)}>Previous</button>
-              <button type="button" className="tool-button" disabled={busy || imagePosition >= total - 1}
-                aria-label="Next image" onClick={() => void navigateImage(1)}>Next</button>
-            </div>
-            <p className="image-position">{imagePosition + 1} of {total} · Left / Right arrows</p>
             <input className="dataset-search" aria-label="Search images" placeholder="Search images"
               value={search} onChange={event => setSearch(event.target.value)} />
             {search && editorMatches.length > 100 && <div className="image-navigation search-pagination">
@@ -1538,16 +1559,23 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
             </div>
           </nav>
           <div className="drawing-tools" role="toolbar" aria-label="Annotation tools" aria-orientation="vertical">
-            {tools.map(item => <button key={item.id} type="button" aria-label={item.name}
-              title={`${item.name} (${item.shortcut})`} aria-pressed={tool === item.id} disabled={busy}
-              className={`drawing-tool${tool === item.id ? ' active' : ''}`}
-              onClick={() => chooseTool(item.id)}>
-              <span className="drawing-tool-icon" aria-hidden="true">{item.icon}</span>
-              <span>{item.name}</span><kbd>{item.shortcut}</kbd>
-            </button>)}
+            {toolGroups.map(group => <div className="drawing-tool-group" key={group.name}>
+              <span className="drawing-tool-group-label">{group.name}</span>
+              {group.tools.map(id => {
+                const item = tools.find(candidate => candidate.id === id)!;
+                return <button key={item.id} type="button" aria-label={item.name}
+                  title={`${item.name} (${item.shortcut})`} aria-pressed={tool === item.id} disabled={busy}
+                  className={`drawing-tool${tool === item.id ? ' active' : ''}`}
+                  onClick={() => chooseTool(item.id)}>
+                  <span className="drawing-tool-icon" aria-hidden="true">{item.icon}</span>
+                  <span>{item.name}</span><kbd>{item.shortcut}</kbd>
+                </button>;
+              })}
+            </div>)}
           </div>
-          <div className="canvas-frame">
-            <svg ref={svg} className={`annotation-canvas tool-${tool}`}
+          <div className="canvas-column">
+            <div className="canvas-frame">
+              <svg ref={svg} className={`annotation-canvas tool-${tool}`}
               viewBox={`${view.x} ${view.y} ${current.document.image.canonical.width / view.zoom} ${current.document.image.canonical.height / view.zoom}`}
               role="img" aria-label={`${current.document.image.name} annotation canvas`}
               onPointerDown={onPointerDown} onPointerMove={onPointerMove}
@@ -1615,9 +1643,17 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
                 points={polygon.map(point => `${point.x},${point.y}`).join(' ')} />}
               {polygon.map((point, index) => <circle key={index} cx={point.x} cy={point.y}
                 r={handleRadius / 2} fill="#39764d" pointerEvents="none" />)}
-            </svg>
+              </svg>
+            </div>
+            <div className="image-stepper" aria-label="Image navigation">
+              <button type="button" className="tool-button" disabled={busy || imagePosition <= 0}
+                aria-label="Previous image" onClick={() => void navigateImage(-1)}>← Previous</button>
+              <span>Image {imagePosition + 1} of {total}</span>
+              <button type="button" className="tool-button" disabled={busy || imagePosition >= total - 1}
+                aria-label="Next image" onClick={() => void navigateImage(1)}>Next →</button>
+            </div>
           </div>
-          <aside className="annotation-sidebar">
+          <aside id="editor-inspector-panel" className="annotation-sidebar" hidden={!inspectorOpen}>
             <h2>Labels & annotations</h2>
             <p className="save-indicator" role="status">{notice}</p>
             <label className="review-select">Active class

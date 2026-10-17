@@ -132,6 +132,11 @@ export function App() {
         {!creating && !busy && !error && workspaces.length === 0 && <div className="workspace-empty">
           <h2>A workspace for each dataset</h2>
           <p>Create a workspace, then add a folder or images. Your originals stay unchanged.</p>
+          <ol className="workflow-preview">
+            <li><span className="step-number" aria-hidden="true">1</span><div><strong>Create a workspace</strong><small>Keep each dataset and its settings together.</small></div></li>
+            <li><span className="step-number" aria-hidden="true">2</span><div><strong>Add images or a folder</strong><small>Bring in a dataset without changing your originals.</small></div></li>
+            <li><span className="step-number" aria-hidden="true">3</span><div><strong>Annotate, then export</strong><small>Use boxes, polygons, keypoints, masks, or image labels.</small></div></li>
+          </ol>
         </div>}
         <div className="workspace-grid" aria-label="Your workspaces">
           {workspaces.map(item => <div className="workspace-entry" key={item.id}><button className="workspace-tile" type="button" disabled={busy || labOpen || item.deleting}

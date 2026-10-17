@@ -23,6 +23,17 @@ test('Pages subpath supports HTML-only CSP, WASM storage, editing, and scoped of
   );
   await expect(page.locator('.gallery-item')).toHaveCount(1);
   await page.locator('.gallery-open').click();
+  await expect(page.getByRole('button', { name: 'Export dataset', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'Images panel', exact: true }).click();
+  await expect(page.locator('#editor-images-panel')).toBeHidden();
+  await page.getByRole('button', { name: 'Properties panel', exact: true }).click();
+  await expect(page.locator('#editor-inspector-panel')).toBeHidden();
+  await page.getByRole('button', { name: 'Images panel', exact: true }).click();
+  await page.getByRole('button', { name: 'Properties panel', exact: true }).click();
+  await expect(page.locator('#editor-images-panel')).toBeVisible();
+  await expect(page.locator('#editor-inspector-panel')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Previous image', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Next image', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Image labels', exact: true }).click();
   await page.getByRole('button', { name: 'class_0', exact: true }).click();
   await expect(page.getByRole('button', { name: 'class_0 · label', exact: true })).toBeVisible();

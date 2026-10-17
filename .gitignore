@@ -7,3 +7,4 @@ benchmarks/generated/
 sbom.cdx.json
 .DS_Store
 *.tsbuildinfo
+z
