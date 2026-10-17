@@ -6,7 +6,7 @@
 2. A user-selected file is decoded inside a media worker. It is never sent to a server.
 3. A freshly encoded sanitized PNG and preview exist transiently in browser memory.
 4. On explicit save or import, the storage worker encrypts annotation documents and sanitized media before writing SQLite/OPFS.
-5. Exit workspace (or lock in the developer lab) terminates workers, clears app-held sensitive state, and revokes the preview URL. Protected workspaces require their passphrase again; no-password workspaces can be reopened by anyone with access to the browser profile.
+5. Exit, manual lock, and protected-workspace inactivity lock terminate workers, clear app-held sensitive state, and revoke image/mask/thumbnail/recovery URLs. Protected workspaces require their passphrase again; no-password workspaces can be reopened by anyone with access to the browser profile.
 6. Explicit annotation export writes the selected format (YOLO, COCO, Pascal VOC, CSV, or native JSON), optionally with sanitized PNGs, as plaintext into a new user-selected local folder outside vault encryption. Filenames and the export manifest may identify the dataset. Only choose destinations where plaintext copies are appropriate.
 7. Explicit **Encrypted backup** encrypts dataset records/media and the manifest inside the storage worker using a separate random backup key and user-confirmed backup passphrase. Only ciphertext and public wrapping metadata reach the selected folder. Restore authenticates and stages the dataset before atomic publication into an empty workspace. Developer proof records and in-memory history are excluded.
 
@@ -22,15 +22,19 @@ The original source folder is unchanged and not protected by this vault. App-man
 
 Keep complete encrypted backup folders outside the browser profile and retain their passphrases separately. Backup sizes, counts, opaque IDs, and KDF parameters remain observable. A local folder managed by a separate cloud-sync application can be uploaded by that application; this site does not control it. Filesystem permissions and other programs may also modify/delete backups.
 
-Changing the workspace passphrase rewraps the same root key, with a fresh salt/nonce; it does not change independent backup passphrases, revoke copied previous vault headers, or rotate a compromised data key. Full rotation, recovery secrets, and inactivity lock remain unfinished.
+Changing the workspace passphrase rewraps the same root key, with a fresh salt/nonce; it does not change independent backup passphrases, revoke copied previous vault headers, or rotate a compromised data key. Full root-key rotation separately stages re-encryption of current records/images/masks/schema, publishes the new header atomically, invalidates recovery and derived thumbnails, then removes obsolete files. It cannot revoke old backups, copied data/headers, authorized plaintext copies, or forensic remnants.
 
-Protection mode is chosen at workspace creation. There is no in-place password-mode conversion. Use encrypted backup/restore into a new protected workspace to move a no-password dataset. The Sharing panel is informational until collaboration and encrypted cloud sync are implemented; opening it does not transmit data.
+An optional downloaded recovery file contains a plaintext 256-bit secret. Together with surviving workspace storage it bypasses the normal passphrase; keep it securely separate. The app persists only an independent wrapper, never the secret. Regeneration replaces that wrapper, normal passphrase changes retain it, and full key rotation invalidates it. A recovery file alone cannot restore cleared browser data. There is no server password-reset service.
+
+Page thumbnails are generated locally from sanitized canonical media and encrypted before OPFS writes; no plaintext derivative cache is persisted. At most 100 page-preview URLs are retained, revoked on page/filter/image changes or lock. Resumable intake stores source fingerprints and their context only inside encrypted image records. They are not transmitted or exposed as public storage filenames.
+
+Protection mode is chosen at workspace creation. There is no in-place password-mode conversion. Use encrypted backup/restore into a new workspace with the desired protection, verify the restored data, then explicitly delete the old workspace if appropriate. The old source remains intact until deletion; an old unprotected copy remains unprotected. Dashboard deletion checks the exact workspace name and refuses active editors; interrupted deletion stays marked for retry. It cannot promise secure disk erasure. The Sharing panel is informational until collaboration and encrypted cloud sync are implemented; opening it does not transmit data.
 
 Not protected against:
 
 - A compromised browser, extension, OS, served application, or dependency at unlock time.
 - Weak passphrases, clipboard/history/screenshots, OS swap, GPU memory, crash dumps, or forensic recovery of previous plaintext.
-- Lost keys/passphrases. No server can reset or decrypt this proof vault.
+- Lost keys/passphrases without an enabled recovery file and surviving data. No server can reset or decrypt the workspace.
 - Identifying information in actual image pixels; metadata stripping is not medical de-identification.
 - Authorized users exporting or copying plaintext.
 

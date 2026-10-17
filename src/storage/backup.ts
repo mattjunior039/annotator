@@ -5,6 +5,8 @@ import type { AnnotationDocument } from '../domain/model';
 import { verifySanitizedPng } from '../datasets/media';
 import { datasetSchemaSchema } from '../domain/dataset-schema';
 import type { DatasetSchema } from '../domain/dataset-schema';
+import { checkMaskPayloads, checkTile, maskIds, TILE_BYTES } from '../domain/masks';
+import type { MaskTile } from '../domain/masks';
 
 const encoder = new TextEncoder(), decoder = new TextDecoder('utf-8', { fatal: true });
 const maxEnvelopeBytes = MAX_OBJECT_BYTES + 16_384;
@@ -14,6 +16,7 @@ const objectSchema = z.strictObject({
 });
 const entrySchema = z.strictObject({
   id: z.uuid(), mediaId: z.uuid(), record: objectSchema, media: objectSchema,
+  tiles: z.array(z.strictObject({ id: z.uuid(), object: objectSchema })).max(128).optional(),
 });
 const manifestSchema = z.strictObject({
   version: z.literal(1), backupId: z.uuid(), entries: z.array(entrySchema).max(10_000),
@@ -82,9 +85,7 @@ function verifyRecord(record: BackupRecord, media: Uint8Array<ArrayBuffer>) {
       dimensions.height !== record.document.image.canonical.height) {
     throw new Error('Backup image dimensions do not match its annotation document.');
   }
-  if (record.document.annotations.some(annotation => annotation.kind === 'mask')) {
-    throw new Error('Backup cannot include mask references without their tile data.');
-  }
+  maskIds(record.document);
 }
 
 export class BackupWriter {
@@ -108,19 +109,29 @@ export class BackupWriter {
     const { root, wrapped } = await createVaultKey(passphrase, crypto.randomUUID());
     return new BackupWriter(directory, root, wrapped, schema ? datasetSchemaSchema.parse(schema) : undefined);
   }
-  async append(input: BackupRecord, media: Uint8Array<ArrayBuffer>): Promise<void> {
+  async append(input: BackupRecord, media: Uint8Array<ArrayBuffer>, tiles: MaskTile[] = []): Promise<void> {
     if (this.completed) throw new Error('Backup is already complete; its files cannot be changed.');
     const record = backupRecordSchema.parse(input);
     if (this.entries.length >= 10_000) throw new Error('Backup image limit exceeded.');
     if (this.ids.has(record.document.image.id)) throw new Error('Backup image was already written.');
     verifyRecord(record, media);
+    const required = new Set(maskIds(record.document));
+    if (tiles.length !== required.size || new Set(tiles.map(tile => tile.id)).size !== tiles.length ||
+        tiles.some(tile => !required.has(tile.id))) throw new Error('Backup mask references require their exact tile data.');
+    for (const tile of tiles) checkTile(new Uint8Array(tile.pixels));
+    checkMaskPayloads(record.document, tiles);
     const id = record.document.image.id, mediaId = record.document.image.mediaId;
     const recordBytes = await sealObject(this.root, this.key.workspaceId, id,
       encoder.encode(JSON.stringify(record)), 'backup-record');
     const mediaBytes = await sealObject(this.root, this.key.workspaceId, mediaId, media, 'backup-media');
     const recordInfo = await writeVerified(this.directory, `${id}.record.enc`, recordBytes);
     const mediaInfo = await writeVerified(this.directory, `${mediaId}.media.enc`, mediaBytes);
-    this.entries.push({ id, mediaId, record: recordInfo, media: mediaInfo });
+    const tileInfo = [];
+    for (const tile of tiles) {
+      const bytes = await sealObject(this.root, this.key.workspaceId, tile.id, new Uint8Array(tile.pixels), 'backup-mask');
+      tileInfo.push({ id: tile.id, object: await writeVerified(this.directory, `${tile.id}.mask.enc`, bytes) });
+    }
+    this.entries.push({ id, mediaId, record: recordInfo, media: mediaInfo, ...(tileInfo.length ? { tiles: tileInfo } : {}) });
     this.ids.add(id);
   }
   async finish(): Promise<void> {
@@ -159,7 +170,7 @@ export class BackupReader {
     if (manifest.backupId !== bootstrap.key.workspaceId) throw new Error('Backup manifest belongs to a different archive.');
     return new BackupReader(directory, root, manifest);
   }
-  async read(index: number): Promise<{ record: BackupRecord; media: Uint8Array<ArrayBuffer> }> {
+  async read(index: number): Promise<{ record: BackupRecord; media: Uint8Array<ArrayBuffer>; tiles: MaskTile[] }> {
     if (!Number.isInteger(index) || index < 0 || index >= this.count) throw new Error('Backup image index is invalid.');
     const entry = this.manifest.entries[index]!;
     const recordBytes = await verifiedRead(this.directory, `${entry.id}.record.enc`, entry.record);
@@ -172,7 +183,19 @@ export class BackupReader {
     const mediaBytes = await verifiedRead(this.directory, `${entry.mediaId}.media.enc`, entry.media);
     const media = await openObject(this.root, this.manifest.backupId, entry.mediaId, mediaBytes, 'backup-media');
     verifyRecord(record, media);
-    return { record, media };
+    const required = new Set(maskIds(record.document)), descriptors = entry.tiles ?? [];
+    if (descriptors.length !== required.size || new Set(descriptors.map(tile => tile.id)).size !== descriptors.length ||
+        descriptors.some(tile => !required.has(tile.id))) throw new Error('Backup mask references do not match its authenticated manifest.');
+    const tiles: MaskTile[] = [];
+    for (const tile of descriptors) {
+      const bytes = await verifiedRead(this.directory, `${tile.id}.mask.enc`, tile.object);
+      const pixels = await openObject(this.root, this.manifest.backupId, tile.id, bytes, 'backup-mask');
+      if (pixels.length !== TILE_BYTES) throw new Error('Backup mask tile size is invalid.');
+      checkTile(pixels);
+      tiles.push({ id: tile.id, pixels: pixels.buffer });
+    }
+    checkMaskPayloads(record.document, tiles);
+    return { record, media, tiles };
   }
 }
 

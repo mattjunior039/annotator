@@ -10,7 +10,9 @@ A local-first image annotator under active development. The current build starts
 - Import folders as a local dataset, add images later, and remove individual images from the encrypted workspace without deleting source files.
 - Import YOLOv8 detection `data.yaml` class names and paired `images/` + `labels/` box annotations. Train/val/test splits are retained when detected.
 - Export YOLO detection, YOLO polygon segmentation, COCO JSON, Pascal VOC XML, CSV, or native annotation JSON. Choose the whole dataset or current image, with sanitized PNG images or annotations only; export does not overwrite the source folder.
-- Annotate with bounding boxes, polygons, image labels, and basic keypoints; add classes, undo/redo, and set review state.
+- Annotate with bounding boxes, polygons, tiled binary masks, image labels, and named keypoints; add classes, undo/redo, and set review state.
+- Brush/erase masks with copy-on-write encrypted tiles. Selected instances have visibility, locking, primitive JSON attributes, polygon vertex controls, and keypoint visibility controls.
+- Atomically import native JSON with mask sidecars, COCO boxes/simple polygons/uncompressed mask RLE/keypoints, Pascal VOC boxes, YOLO detection, and YOLO segmentation onto existing images.
 - Manage shared dataset classes and named skeleton points. Additions apply to all images and future imports; existing keypoint coordinates are preserved.
 - Use Dataset / Annotate / Export navigation, search/review filters, a compact drawing-tool rail, a large canvas, an active-class panel, zoom/pan, and previous/next image navigation. The Select tool moves shapes, resizes boxes, and adjusts polygon/keypoint vertices.
 - Store encrypted records and media in worker-owned SQLite WASM/OPFS storage. The app limits a workspace to 10,000 images, but that scale has not been performance-certified.
@@ -18,21 +20,25 @@ A local-first image annotator under active development. The current build starts
 - Inspect storage usage and optionally request persistent browser storage.
 - Create encrypted dataset backups with an independent passphrase, and verify/stage a restore into an empty workspace before publishing it atomically.
 - Change a protected workspace's passphrase without rewriting saved images; backups retain their own independent passphrases.
+- Lock protected workspaces manually or after session-configurable inactivity; optionally generate a recovery-secret file and rotate the complete workspace root key through staged re-encryption.
+- Search the entire catalog with at most 100 gallery/editor rows rendered at once. **Load page previews** lazily generates encrypted, cached, at-most-160-pixel thumbnails for that page only.
+- Resume interrupted intake by reselecting files with **Resume intake** enabled. Encrypted per-image checkpoints bind original bytes, paths, and supplied labels/classes; exact repeats are skipped without overwriting later edits.
+- Delete a whole workspace from the dashboard after typing its name. Active editors block deletion; incomplete deletion stays marked for an explicit retry.
 
 The app does not send dataset images or annotations to a remote service. Production CSP and browser tests cover the implemented paths; `connect-src 'self'` and an offline service worker are not a mathematical air-gap guarantee. See [the privacy contract](docs/privacy.md).
 
 ## Known limitations
 
-- Segmentation currently means vector polygons; tiled pixel-mask editing is not implemented.
-- Keypoint editing and skeleton controls are basic.
-- Annotation import currently reads YOLO detection labels only. Additional export formats are not additional import formats. Encrypted dataset backup/restore is a separate feature; pixel masks, COCO keypoint export, and automatic format conversion are not implemented.
+- Masks are binary instance masks, not multichannel semantic maps. Limits are 128 current tiles/image, 64 changed tiles/stroke, 512 retained historical tiles/image, and 256 x 256 bytes/tile. Reopen the workspace to prune unreferenced history tiles when its history budget is reached.
+- COCO compressed RLE, polygon holes/multipart objects, and mixed segmentation/keypoints in a single COCO instance are rejected. Imports replace annotations on matched images after confirmation; they do not add image pixels. CSV import is not implemented.
+- Annotation imports have an 8-MiB text-file and 128-MiB selected-input budget. They are parsed into bounded batches, not a fully streaming parser or a certified large-dataset importer.
 - Dataset schema edits currently support additions, not destructive class removal/renaming or skeleton reordering. Older per-image definitions are reconciled by exact name on unlock; conflicting IDs or exclusive groups stop migration explicitly.
 - Live collaboration, signaling/TURN, encrypted cloud sync, Hugging Face/Drive adapters, and the privacy-flow explorer are not implemented.
 - AI integration is intentionally excluded.
 - Workspace names, protection settings, and creation times are public local catalog metadata. Avoid sensitive workspace names. A workspace's **Sharing** panel currently explains manual export/backup only; it does not create live rooms or upload data.
 - The media pipeline currently has conservative 4-megapixel/8-MiB limits and rejects uncertified ICC-profiled, 16-bit, animated, and unsupported input.
-- Browser storage can be cleared or evicted. OPFS is not a backup; a forgotten passphrase cannot be reset. Header scrubbing does not remove identifying content burned into image pixels.
-- Inactivity lock, recovery secrets, full data-key rotation, encryption conversion, and the complete local release failure/performance matrix remain unfinished. Changing a passphrase is not data-key revocation.
+- Browser storage can be cleared or evicted. OPFS is not a backup; recovery requires an enabled recovery file and surviving local data. Header scrubbing does not remove identifying content burned into image pixels.
+- Protection-mode conversion uses encrypted backup/restore into a separate workspace, not an in-place toggle. Exhaustive write-boundary/migration/quota failure tests, accessibility certification, wider media certification, streaming import, and the 10,000-image resource/performance gate remain unfinished. Changing a passphrase is not data-key rotation.
 
 Do not use this build for sensitive medical or proprietary data until the remaining security, compatibility, recovery, and release gates have been completed and independently reviewed.
 
@@ -43,7 +49,7 @@ Do not use this build for sensitive medical or proprietary data until the remain
 3. Imported labels appear as editable bounding boxes. Remove an image from the workspace with its **Remove** control; this deletes the encrypted workspace copy and annotations, not the original file.
 4. Choose **Export dataset**, select **YOLO detection**, choose whether to include PNG images, then choose **Choose destination & export**. The app creates a uniquely named new folder. This export is a plaintext copy outside workspace encryption.
 
-The current cap is 10,000 images per workspace and 10,000 per import; per-image sanitizer and storage limits are currently 4 megapixels and 8 MiB. These are bounded prototype limits, not unlimited storage or a 10,000-image performance certification. Import is additive; it does not sync later source-folder changes automatically.
+The current cap is 10,000 images per workspace and 10,000 per import; per-image sanitizer and storage limits are currently 4 megapixels and 8 MiB. These are bounded prototype limits, not unlimited storage or a 10,000-image performance certification. Import is additive; it does not sync later source-folder changes automatically. Intake checks origin quota first, but cannot reserve storage or predict PNG expansion. Completed per-image commits survive cancellation/quota failure. To resume, reselect the folder with **Resume intake** checked; old imports/restored backups lacking checkpoints cannot be skipped automatically. Leave it unchecked to intentionally add duplicate copies.
 
 ### Annotate an image
 
@@ -53,7 +59,9 @@ Use **Dataset classes and skeletons** on the dataset page or the editor's **Add 
 
 Choose **Select** to move an annotation, resize a box with its corner handles, adjust polygon/keypoint vertices, or change the selected annotation's class. Edits save locally after each completed action. Invalid polygons are rejected visibly without replacing the saved shape.
 
-Shortcuts (when not typing in a field): **1–4** select drawing/labeling tools, **V** selects editing, **H** selects pan, **+ / -** zoom, **0** fits the image, **Enter** finishes a polygon, **Escape** cancels an unfinished gesture, **Delete** removes the selected annotation, and **Left / Right** changes images. **Ctrl/Cmd+Z** undoes; **Ctrl/Cmd+Shift+Z** redoes. Undo history is in memory for the currently open image, not persisted across image navigation. Choose **Dataset** to return to file management without locking the workspace.
+Shortcuts (when not typing in a field): **1–4** select drawing/labeling tools, **5 / 6** select mask brush/erase, **V** selects editing, **H** selects pan, **+ / -** zoom, **0** fits the image, **Enter** finishes a polygon, **Escape** cancels an unfinished gesture, **Delete** removes the selected annotation, and **Left / Right** changes images. **Ctrl/Cmd+Z** undoes; **Ctrl/Cmd+Shift+Z** redoes. Undo history is in memory for the currently open image, not persisted across image navigation. Choose **Dataset** to return to file management without locking the workspace.
+
+Brush an existing selected mask to extend it; otherwise brushing creates an instance. Erase affects the selected mask. Hidden instances are omitted from the canvas but remain in exports; visibility is not deletion. Locked instances reject edits until explicitly unlocked. JSON attributes accept at most 64 primitive string/number/boolean fields. Select a named keypoint to place it or set absent/occluded/visible status.
 
 Choose **Exit workspace** to close the current dataset and return to the dashboard, where you can create or open another workspace. Each workspace has independent storage and keys; the original source folders remain untouched.
 
@@ -67,7 +75,15 @@ The first load of this version migrates the previous workspace list into a separ
 2. Backups include all dataset images, supported annotations, classes, skeletons, attributes, source paths, splits, review states, and revisions. They do not include developer proof records, in-memory undo history, original source bytes, or workspace/UI settings. Work proceeds one image at a time with progress and cancellation; an incomplete folder is not acknowledged as a completed backup.
 3. To restore, create or open an **empty workspace**, choose **Restore backup**, enter the backup passphrase, and select the backup folder. The current workspace passphrase may be different, or the workspace may have no password. Existing images are never replaced or merged; restore is disabled for nonempty workspaces. Exit and create another workspace to keep the datasets separate; do not clear your current site data.
 4. Each restored record and image is authenticated, checked against its manifest and canonical dimensions, re-encrypted under the current workspace key, and staged privately. Only after all items pass does one database transaction make them visible. Errors/cancellation leave the dataset unchanged; reopening cleans media left by interrupted staging.
-5. **Workspace security** on the Dataset page changes a protected workspace's passphrase. Confirm the current and new passphrases. This rewraps the existing root key, not the image ciphertext. Existing backups and copies of the previous vault header remain decryptable with their previous passphrases; a leaked data key requires full rotation, which is not yet implemented. Protection mode is chosen at creation, not toggled in place. To move a no-password dataset into a protected workspace, use encrypted backup/restore into a new protected workspace.
+5. **Workspace security** changes a protected workspace's passphrase. This rewraps the existing root key, not its image ciphertext. **Rotate workspace encryption key** instead stages fresh-key encryption of every current record, image, mask, and schema before switching the header atomically. Interrupted/cancelled staging retains the old key; completion activates the new passphrase and invalidates old recovery files. Cached thumbnails are discarded and regenerated. Old backups, copied headers/data, and forensic remnants are not revoked.
+
+### Locking, recovery, and protection conversion
+
+Protected workspaces have **Lock workspace** and an inactivity interval (15 minutes by default; session-only). Lock terminates workers, revokes image/mask/thumbnail/recovery URLs, and discards unfinished gestures and in-memory undo, not completed edits. Active storage operations finish before an inactivity lock; JavaScript cannot guarantee physical memory erasure.
+
+**Recovery secret** verifies your current passphrase, creates a separate root-key wrapper, and offers a plaintext secret file for explicit download. Keep it securely outside this browser profile: possession of this file plus the workspace data bypasses the passphrase. Generating another file revokes the previous wrapper. From the locked screen, **Recover with a recovery file** sets a new passphrase. The file is not a data backup and cannot recover cleared browser storage. Normal passphrase changes preserve recovery; full key rotation invalidates it.
+
+To change password-protection mode, make an encrypted backup, create a separate workspace with the desired protection, restore there, and verify its images/annotations before deleting the old workspace. Restore stages every image and mask under a fresh destination key; the source workspace remains intact until you explicitly delete it. Keeping an old unprotected copy defeats protection of that copy. There is no in-place protection toggle or guaranteed forensic erasure.
 
 Backup/restore requires desktop Chromium's local directory access and the same current 10,000-image, 4-megapixel, and 8-MiB object limits. This is a tested prototype, not independently audited backup certification. Public metadata reveals opaque IDs, object counts/sizes, and KDF parameters, not filenames or labels. A backup written into a cloud-synchronized local folder may be uploaded by that separate sync application; choosing that location is your responsibility.
 
@@ -77,10 +93,10 @@ Backup/restore requires desktop Chromium's local directory access and the same c
 | --- | --- | --- |
 | YOLO detection | Boxes | Split `images/` and `labels/*.txt`, normalized centers/sizes, `data.yaml` |
 | YOLO segmentation | Polygons | Split `images/` and `labels/*.txt`, normalized vertices, `data.yaml` |
-| COCO JSON | Boxes and polygons | Per-split `_annotations.coco.json`; `file_name` is relative to that split |
+| COCO JSON | Boxes, simple polygons, binary masks, keypoints | Per-split `_annotations.coco.json`; uncompressed column-major mask RLE, non-crowd by default (boolean `iscrowd` preserves imported crowd status); one consistent named skeleton per category |
 | Pascal VOC XML | Boxes | Per-image XML; one-based inclusive integer boxes enclosing subpixel coordinates |
 | CSV annotations | Boxes, polygons, image labels, keypoints | `annotations.csv` with JSON pixel geometry, skeleton, attributes, and review columns; this is an app-defined CSV schema, not a universal trainer format |
-| Native annotation JSON | All currently editable annotation types | Versioned per-image documents preserving classes, IDs, skeletons, attributes, and review state; not an encrypted vault backup or a currently importable restore format |
+| Native annotation JSON | All currently editable annotation types | Versioned per-image documents plus raw mask `.bin` sidecars preserving classes, IDs, skeletons, attributes, instance properties, and review state; importable onto existing images, not an encrypted vault backup |
 
 Unsupported annotation types stop preflight before any export files are created; they are never silently omitted or converted. All exports include `export-manifest.json` with original-to-exported image paths, class names, dimensions, and splits. Training formats preserve their supported training geometry/classes, not every editor field.
 
@@ -106,12 +122,19 @@ npm run preview
 
 The VS Code **Build annotator** task runs the type-checked production build. Development permits Vite's inline stylesheet injection; production does not. Runtime dependencies, workers, and SQLite WASM are self-hosted; no remote fonts, CDNs, telemetry, cloud services, or AI integrations are included.
 
+### Publish on GitHub Pages
+
+In the repository's **Settings → Pages**, select **GitHub Actions** as the deployment source, then push these changes to `master`/`main` or manually run **Deploy GitHub Pages**. The included [workflow](.github/workflows/pages.yml) tests and publishes the static build with the correct repository path. For this repo, the default URL is **https://mattjunior039.github.io/annotator/**.
+
+Pages serves the app, not your datasets. Existing localhost workspaces stay on that origin; use encrypted backup/restore to move them to the Pages site. Pages cannot set custom security headers, so the build includes an HTML CSP fallback with documented limitations. See [deployment instructions and hosting trust boundaries](deploy/README.md) before using real data.
+
 ## Validate
 
 ```sh
 npm run check
 npm test
 npm run test:browser
+npm run test:pages
 ```
 
 The browser suite builds and tests the production app in Chromium. The first browser run requires `npx playwright install chromium` if Chromium is missing. Synthetic fixtures are generated locally; do not substitute private or third-party images.

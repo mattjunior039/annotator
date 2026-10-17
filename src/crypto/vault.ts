@@ -12,6 +12,10 @@ export const wrappedKeySchema = z.strictObject({
   salt: hexSchema(16), nonce: hexSchema(12), wrapped: hexSchema(48),
 });
 export type WrappedKey = z.infer<typeof wrappedKeySchema>;
+export const recoverySecretSchema = z.strictObject({
+  format: z.literal('annotator-recovery-secret'), version: z.literal(1), workspaceId: z.uuid(),
+  secret: hexSchema(32),
+});
 export const deviceKeySchema = z.strictObject({
   version: z.literal(1), mode: z.literal('device'), workspaceId: z.uuid(), key: hexSchema(32),
 });
@@ -28,14 +32,14 @@ export async function openDeviceKey(input: unknown) {
   try { return await crypto.subtle.importKey('raw', raw, 'HKDF', false, ['deriveKey']); }
   finally { raw.fill(0); }
 }
-export type ObjectPurpose = 'record' | 'media' | 'schema' | 'backup-record' | 'backup-media' | 'backup-manifest';
+export type ObjectPurpose = 'record' | 'media' | 'mask' | 'thumbnail' | 'schema' | 'backup-record' | 'backup-media' | 'backup-mask' | 'backup-manifest';
 const headerSchema = z.strictObject({
   version: z.literal(1), workspaceId: z.uuid(), objectId: z.uuid(),
   generation: z.uuid(), salt: hexSchema(16), chunkBytes: z.literal(CHUNK_BYTES),
   length: z.number().int().min(0).max(MAX_OBJECT_BYTES),
   chunks: z.number().int().min(0).max(MAX_OBJECT_BYTES / CHUNK_BYTES),
   contentType: z.literal('application/octet-stream'),
-  purpose: z.enum(['record', 'media', 'schema', 'backup-record', 'backup-media', 'backup-manifest']),
+  purpose: z.enum(['record', 'media', 'mask', 'thumbnail', 'schema', 'backup-record', 'backup-media', 'backup-mask', 'backup-manifest']),
 });
 
 export function hex(bytes: Uint8Array): string {

@@ -278,6 +278,11 @@ button { font: inherit; }
 .annotation-row { display: block; width: 100%; padding: 10px 7px; border: 0; border-radius: 4px; background: #fff; color: #697266; text-align: left; font-size: 13px; cursor: pointer; }
 .annotation-row.active { background: #f4f8f2; color: #315d39; }
 .review-select { margin-top: 14px; }
+.annotation-sidebar fieldset { min-width: 0; margin: 14px 0; padding: 10px; border: 1px solid #e1e4de; border-radius: 5px; }
+.annotation-sidebar fieldset legend { font-size: 12px; }
+.annotation-sidebar fieldset button { margin: 6px 3px 0 0; font-size: 12px; }
+.annotation-properties textarea { display: block; width: 100%; min-height: 80px; padding: 6px; border: 1px solid #dce1d8; font: 12px monospace; resize: vertical; }
+.annotation-properties input[type=checkbox] { width: auto; display: inline; margin-right: 6px; }
 .review-select select { font-size: 12px; }
 .remove-button { width: 100%; margin-top: 14px; padding: 10px; border: 1px solid #ecd6d2; border-radius: 5px; background: #fff8f6; color: #963e33; font-size: 12px; cursor: pointer; }
 .export-dialog { width: min(560px, calc(100% - 32px)); max-height: 90dvh; overflow: auto; padding: 28px; border: 1px solid #dce1d8; border-radius: 12px; color: #30372f; box-shadow: 0 24px 80px #16231b33; }
@@ -332,3 +337,8 @@ button { font: inherit; }
   .annotation-list { grid-column: 1 / -1; }
   .remove-button { margin-top: 0; }
 }
+.workspace-entry { display: flex; flex-direction: column; align-items: stretch; gap: 0.5rem; }
+.workspace-entry > .workspace-tile { width: 100%; flex: 1; }
+.gallery-thumbnail { width: 100%; height: 100px; object-fit: contain; background: #f0f2f1; }
+.image-sidebar .search-pagination { display: grid; grid-template-columns: minmax(0, 1fr); float: none; clear: both; margin-bottom: 8px; }
+.search-pagination button { min-width: 0; white-space: normal; }

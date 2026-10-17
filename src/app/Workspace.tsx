@@ -5,6 +5,8 @@ import { documentSchema } from '../domain/model';
 import type { Annotation, AnnotationDocument } from '../domain/model';
 import { applyDatasetSchema } from '../domain/dataset-schema';
 import type { DatasetSchema } from '../domain/dataset-schema';
+import { maskIds, paintMask, TILE_SIZE } from '../domain/masks';
+import type { Mask, MaskTile } from '../domain/masks';
 import { signedArea } from '../domain/geometry';
 import { resizeBox, translateAnnotation } from '../domain/editor-geometry';
 import type { BoxCorner, Point } from '../domain/editor-geometry';
@@ -16,16 +18,20 @@ import {
 } from '../interchange/export';
 import type { ExportFormat } from '../interchange/export';
 import type { YoloSplit } from '../interchange/yolo';
+import { importAnnotationFiles } from '../interchange/import';
+import type { ImportFormat } from '../interchange/import';
 import { WorkerClient } from '../workers/client';
 import {
   mediaResultSchema, statusSchema, workspaceDeleteSchema, workspaceImportSchema,
   workspaceExportInfoSchema, workspaceListSchema, workspaceReadSchema, workspaceWriteSchema,
   archiveFinishedSchema, archiveProgressSchema, passphraseChangedSchema,
   schemaProgressSchema,
+  maskReadSchema, thumbnailSchema, fingerprintSchema,
 } from '../workers/protocol';
 import type { VaultStatus, WorkspaceDescriptor } from '../workers/protocol';
+import { recoverySecretSchema } from '../crypto/vault';
 
-export type Tool = 'box' | 'polygon' | 'label' | 'keypoints' | 'select' | 'pan';
+export type Tool = 'box' | 'polygon' | 'label' | 'keypoints' | 'mask' | 'erase' | 'select' | 'pan';
 interface SizedSanitizedImage { png: ArrayBuffer; width: number; height: number }
 interface WorkspaceProps {
   descriptor: WorkspaceDescriptor;
@@ -43,6 +49,7 @@ interface IndexItem {
   height: number;
   review: 'unannotated' | 'in_progress' | 'annotated' | 'reviewed';
   annotationCount: number;
+  intakeFingerprint?: string | undefined;
 }
 interface OpenImage { document: AnnotationDocument; url: string }
 interface ExportWritable {
@@ -64,6 +71,8 @@ const tools: { id: Tool; name: string; shortcut: string; icon: string }[] = [
   { id: 'box', name: 'Box', shortcut: '1', icon: '□' },
   { id: 'polygon', name: 'Polygon', shortcut: '2', icon: '⬡' },
   { id: 'keypoints', name: 'Keypoint', shortcut: '4', icon: '⊙' },
+  { id: 'mask', name: 'Brush mask', shortcut: '5', icon: '◉' },
+  { id: 'erase', name: 'Erase mask', shortcut: '6', icon: '◌' },
   { id: 'label', name: 'Image labels', shortcut: '3', icon: '≡' },
   { id: 'pan', name: 'Pan', shortcut: 'H', icon: '✥' },
 ];
@@ -74,6 +83,8 @@ const toolHints: Record<Tool, string> = {
   keypoints: 'Click to place a point. Add skeleton points in the right panel for landmarks.',
   select: 'Click a shape to select it. Drag to move; drag handles to resize boxes or adjust points.',
   pan: 'Drag the image to pan. Use + / - to zoom and Fit image to reset the view.',
+  mask: 'Paint a binary pixel mask. Select an existing mask to extend it; otherwise a new instance is created.',
+  erase: 'Select a mask in the annotation list, then erase pixels. Empty tiles are removed.',
 };
 interface ShapeDrag {
   original: Annotation;
@@ -152,6 +163,24 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
   const [newPointName, setNewPointName] = useState('');
   const [datasetSchema, setDatasetSchema] = useState<DatasetSchema | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [brushRadius, setBrushRadius] = useState(4);
+  const [maskUrls, setMaskUrls] = useState<Map<string, string>>(new Map());
+  const maskPixels = useRef<Map<string, Uint8Array>>(new Map());
+  const maskStroke = useRef<{ points: Point[]; mask: Mask; erase: boolean } | null>(null);
+  const [strokePreview, setStrokePreview] = useState<Point[]>([]);
+  const [attributeText, setAttributeText] = useState('{}');
+  const [pointIndex, setPointIndex] = useState(-1);
+  const [vertexIndex, setVertexIndex] = useState(0);
+  const [newVertex, setNewVertex] = useState({ x: '0', y: '0' });
+  const [idleMinutes, setIdleMinutes] = useState(15);
+  const lastActivity = useRef(Date.now());
+  const [recoveryCurrent, setRecoveryCurrent] = useState('');
+  const [recoveryText, setRecoveryText] = useState('');
+  const [recoveryNext, setRecoveryNext] = useState('');
+  const [recoveryConfirmation, setRecoveryConfirmation] = useState('');
+  const [recoveryUrl, setRecoveryUrl] = useState('');
+  const [rotationSecrets, setRotationSecrets] = useState({ current: '', next: '', confirmation: '' });
+  const [rotating, setRotating] = useState(false);
   const [boxStart, setBoxStart] = useState<{ x: number; y: number } | null>(null);
   const [boxEnd, setBoxEnd] = useState<{ x: number; y: number } | null>(null);
   const [polygon, setPolygon] = useState<{ x: number; y: number }[]>([]);
@@ -171,6 +200,12 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
   const [exportCurrent, setExportCurrent] = useState(false);
   const [search, setSearch] = useState('');
   const [reviewFilter, setReviewFilter] = useState('all');
+  const [galleryPage, setGalleryPage] = useState(0);
+  const [editorSearchPage, setEditorSearchPage] = useState(0);
+  const [thumbnailUrls, setThumbnailUrls] = useState<Map<string, string>>(new Map());
+  const [importFormat, setImportFormat] = useState<ImportFormat>('native');
+  const [replaceAnnotations, setReplaceAnnotations] = useState(false);
+  const [resumeIntake, setResumeIntake] = useState(false);
   const [sharingOpen, setSharingOpen] = useState(false);
   const exportDialog = useRef<HTMLDialogElement>(null);
   const [archiveMode, setArchiveMode] = useState<'backup' | 'restore' | null>(null);
@@ -202,6 +237,11 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
     if (!current) return;
     return () => URL.revokeObjectURL(current.url);
   }, [current?.url]);
+  useEffect(() => () => { for (const url of maskUrls.values()) URL.revokeObjectURL(url); }, [maskUrls]);
+  useEffect(() => () => { for (const url of thumbnailUrls.values()) URL.revokeObjectURL(url); }, [thumbnailUrls]);
+  useEffect(() => { setThumbnailUrls(new Map()); }, [galleryPage, search, reviewFilter, current?.document.image.id]);
+  useEffect(() => { setEditorSearchPage(0); }, [search]);
+  useEffect(() => () => { if (recoveryUrl) URL.revokeObjectURL(recoveryUrl); }, [recoveryUrl]);
 
   useEffect(() => {
     if (exportOpen) exportDialog.current?.showModal();
@@ -215,6 +255,31 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
   useEffect(() => {
     if (current) workspace.current?.focus({ preventScroll: true });
   }, [current?.document.image.id]);
+  useEffect(() => {
+    const annotation = current?.document.annotations.find(item => item.id === selected);
+    setAttributeText(JSON.stringify(annotation?.attributes ?? {}, null, 2));
+  }, [selected, current?.document.image.id, current?.document.annotations.find(item => item.id === selected)?.attributes]);
+  useEffect(() => {
+    setPointIndex(-1); setVertexIndex(0);
+  }, [selected, current?.document.image.id]);
+  useEffect(() => {
+    if (!descriptor.passwordProtected || !vault?.unlocked || idleMinutes === 0) return;
+    lastActivity.current = Date.now();
+    const activity = () => { lastActivity.current = Date.now(); };
+    const check = () => {
+      if (Date.now() - lastActivity.current >= idleMinutes * 60_000 && !running.current) lockWorkspace(true);
+    };
+    window.addEventListener('pointerdown', activity, { passive: true });
+    window.addEventListener('keydown', activity);
+    document.addEventListener('visibilitychange', check);
+    const timer = window.setInterval(check, 1000);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('pointerdown', activity);
+      window.removeEventListener('keydown', activity);
+      document.removeEventListener('visibilitychange', check);
+    };
+  }, [vault?.unlocked, descriptor.passwordProtected, idleMinutes]);
 
   async function perform(action: () => Promise<void>) {
     if (running.current) return;
@@ -278,9 +343,37 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
   async function refreshIndex(offset = 0) {
     if (!storage.current) throw new Error('Open the local workspace first.');
     const result = await storage.current.request({ type: 'workspace-list', offset, limit: 100 }, workspaceListSchema);
+    const items = [...result.items];
+    if (offset === 0) {
+      for (let position = items.length; position < result.total; position += 100) {
+        setProgress(`Indexing local dataset ${position} of ${result.total}`);
+        const page = await storage.current.request({ type: 'workspace-list', offset: position, limit: 100 }, workspaceListSchema);
+        if (page.total !== result.total || page.items.length === 0) throw new Error('Workspace catalog changed while indexing. Reopen to retry.');
+        items.push(...page.items);
+      }
+      setProgress(''); setGalleryPage(0);
+    }
     setTotal(result.total);
-    setImageIndex(previous => offset === 0 ? result.items : [...previous, ...result.items]);
+    setThumbnailUrls(new Map());
+    setImageIndex(previous => offset === 0 ? items : [...previous, ...items]);
     return result.total;
+  }
+
+  async function loadThumbnails(items: readonly IndexItem[]) {
+    if (!storage.current) throw new Error('Unlock the workspace before loading previews.');
+    const urls = new Map<string, string>();
+    cancelImport.current = false;
+    try {
+      for (const item of items.slice(0, 100)) {
+        if (cancelImport.current) break;
+        setProgress(`Loading local previews ${urls.size + 1} of ${Math.min(items.length, 100)}`);
+        const result = await storage.current.request({ type: 'workspace-thumbnail', id: item.id }, thumbnailSchema);
+        urls.set(item.id, URL.createObjectURL(new Blob([result.media], { type: 'image/png' })));
+      }
+      setThumbnailUrls(urls);
+      setNotice(`Loaded ${urls.size} local previews. Disk copies are encrypted; only this page's preview URLs are retained in memory.`);
+    } catch (error) { for (const url of urls.values()) URL.revokeObjectURL(url); throw error; }
+    finally { setProgress(''); }
   }
 
   async function openImage(id: string) {
@@ -288,6 +381,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
     const result = await storage.current.request({ type: 'workspace-read', id }, workspaceReadSchema);
     const url = URL.createObjectURL(new Blob([result.media], { type: 'image/png' }));
     const checked = documentSchema.parse(result.document);
+    await loadMaskPixels(checked);
     history.current = new ImageHistory(checked);
     setCurrent({ document: checked, url });
     setClassId(checked.classes[0]?.id ?? '');
@@ -300,12 +394,34 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
     setNotice(`Saved on this device · ${checked.revision} edits`);
   }
 
-  async function persistDocument(next: AnnotationDocument, expectedRevision: number) {
+  async function loadMaskPixels(document: AnnotationDocument) {
+    if (!storage.current) throw new Error('Unlock the workspace first.');
+    const tiles = maskIds(document).length
+      ? await storage.current.request({ type: 'workspace-mask-read', id: document.image.id }, maskReadSchema) : [];
+    const urls = new Map<string, string>();
+    try {
+      for (const tile of tiles) {
+        const canvas = new OffscreenCanvas(TILE_SIZE, TILE_SIZE), context = canvas.getContext('2d');
+        if (!context) throw new Error('Mask rendering requires a 2D canvas.');
+        const image = context.createImageData(TILE_SIZE, TILE_SIZE), bytes = new Uint8Array(tile.pixels);
+        for (let index = 0; index < bytes.length; index++) {
+          image.data[index * 4] = 57; image.data[index * 4 + 1] = 118; image.data[index * 4 + 2] = 77;
+          image.data[index * 4 + 3] = bytes[index] ? 150 : 0;
+        }
+        context.putImageData(image, 0, 0);
+        urls.set(tile.id, URL.createObjectURL(await canvas.convertToBlob({ type: 'image/png' })));
+      }
+    } catch (failure) { for (const url of urls.values()) URL.revokeObjectURL(url); throw failure; }
+    maskPixels.current = new Map(tiles.map(tile => [tile.id, new Uint8Array(tile.pixels)]));
+    setMaskUrls(urls);
+  }
+
+  async function persistDocument(next: AnnotationDocument, expectedRevision: number, tiles: MaskTile[] = []) {
     if (!storage.current || !current) throw new Error('Open an image in the local workspace first.');
     setNotice('Saving…');
     try {
       await storage.current.request({
-        type: 'workspace-update', id: next.image.id, expectedRevision, document: next,
+        type: 'workspace-update', id: next.image.id, expectedRevision, document: next, tiles,
       }, workspaceWriteSchema);
       setCurrent(previous => previous ? { ...previous, document: next } : previous);
       setSelected(previous => next.annotations.some(item => item.id === previous) ? previous : null);
@@ -317,13 +433,14 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
       history.current = new ImageHistory(current.document);
       throw failure;
     }
+    await loadMaskPixels(next);
   }
 
-  async function edit(command: unknown) {
+  async function edit(command: unknown, tiles: MaskTile[] = []) {
     if (!history.current || !current) throw new Error('Open an image first.');
     const before = history.current.snapshot();
     const next = history.current.execute(command, before.revision);
-    await persistDocument(next, before.revision);
+    await persistDocument(next, before.revision, tiles);
   }
 
   async function undoRedo(direction: 'undo' | 'redo') {
@@ -343,12 +460,13 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
     classNames: readonly string[] = ['Object'],
     annotations: Annotation[] = [],
     classIds: readonly string[] = [],
+    intakeFingerprint?: string,
   ) {
     if (!storage.current) throw new Error('Unlock the local workspace before importing.');
     const doc = makeDocument(name, imageResult.width, imageResult.height, classNames, annotations, classIds);
     const mediaBytes = imageResult.png.slice(0);
     await storage.current.request({
-      type: 'workspace-import', document: doc, media: mediaBytes, sourcePath, split,
+      type: 'workspace-import', document: doc, media: mediaBytes, sourcePath, split, intakeFingerprint,
     }, workspaceImportSchema, [mediaBytes]);
     return doc.image.id;
   }
@@ -358,7 +476,11 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
     const value = passphrase;
     setPassphrase('');
     await perform(async () => {
-      if (!storage.current || !vault) throw new Error('Open the local workspace first.');
+      if (!vault) throw new Error('Open the local workspace first.');
+      if (!storage.current) {
+        storage.current = new WorkerClient(new Worker(new URL('../workers/storage.worker.ts', import.meta.url), { type: 'module' }));
+        await storage.current.request({ type: 'workspace-open', workspaceId: descriptor.id }, statusSchema);
+      }
       const next = await storage.current.request({
         type: vault.exists ? 'unlock' : 'create', passphrase: value,
       }, statusSchema);
@@ -379,11 +501,19 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
   async function importBatch(files: readonly File[], existingTotal: number) {
     cancelImport.current = false;
     const plan = await prepareYoloImport(files);
-    if (existingTotal + plan.items.length > 10_000) {
+    if (!resumeIntake && existingTotal + plan.items.length > 10_000) {
       throw new Error(`This import would exceed the 10,000-image workspace limit. There is room for ${10_000 - existingTotal} more images.`);
     }
+    const estimate = await navigator.storage.estimate();
+    if (estimate.quota !== undefined && estimate.usage !== undefined) {
+      const available = Math.max(0, estimate.quota - estimate.usage);
+      if (available < 1024 * 1024) throw new Error('Browser storage is almost full. Free local storage before importing. No images were added.');
+      const inputBytes = plan.items.reduce((sum, item) => sum + item.file.size, 0);
+      setNotice(`Import storage check: ${(available / 1024 / 1024).toFixed(1)} MiB available; ${(inputBytes / 1024 / 1024).toFixed(1)} MiB source files. Sanitized PNG copies can be larger. This is an estimate, not a storage reservation; completed images remain saved if quota is reached.`);
+    }
     const classIds = plan.classNames.map(() => crypto.randomUUID());
-    let imported = 0, failed = 0;
+    let imported = 0, failed = 0, resumed = 0;
+    const completed = new Set(imageIndex.flatMap(item => item.intakeFingerprint ? [item.intakeFingerprint] : []));
     const failures: string[] = [];
     for (let i = 0; i < plan.items.length; i++) {
       if (cancelImport.current) break;
@@ -392,13 +522,19 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
       setProgress(`Preparing ${i + 1} of ${plan.items.length}`);
       try {
         media.current ??= new WorkerClient(new Worker(new URL('../workers/media.worker.ts', import.meta.url), { type: 'module' }));
+        const { fingerprint } = await media.current.request({
+          type: 'file-fingerprint', file, context: JSON.stringify([item.sourcePath, plan.classNames, item.boxes]),
+        }, fingerprintSchema);
+        if (resumeIntake && completed.has(fingerprint)) { resumed++; continue; }
+        if (existingTotal + imported >= 10_000) throw new Error('Workspace limit reached (10,000 images). Completed images remain saved.');
         const sanitized = await media.current.request({ type: 'sanitize', file }, mediaResultSchema);
         const annotations = boxesToAnnotations(
           item.boxes, sanitized.width, sanitized.height, classIds,
         );
         await importImage(
-          file.name, item.sourcePath, item.split, sanitized, plan.classNames, annotations, classIds,
+          file.name, item.sourcePath, item.split, sanitized, plan.classNames, annotations, classIds, fingerprint,
         );
+        completed.add(fingerprint);
         imported++;
       } catch (failure) {
         failed++;
@@ -406,7 +542,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
           const reason = failure instanceof Error ? failure.message : 'Unknown error';
           failures.push(`${item.sourcePath}: ${reason}`);
         }
-        if (failure instanceof Error && /storage is full|quota/i.test(failure.message)) {
+        if (failure instanceof Error && /storage is full|quota|Workspace limit reached/i.test(failure.message)) {
           setError(failure.message);
           break;
         }
@@ -415,11 +551,48 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
     }
     await initializeSchema();
     await refreshIndex(0);
-    setNotice(`Import finished · ${imported} added · ${failed} skipped${plan.orphanLabels ? ` · ${plan.orphanLabels} unmatched label files` : ''}${cancelImport.current ? ' · cancelled' : ''}`);
+    setNotice(`Import finished · ${imported} added · ${failed} skipped${resumed ? ` · ${resumed} already-saved inputs retained` : ''}${plan.orphanLabels ? ` · ${plan.orphanLabels} unmatched label files` : ''}${cancelImport.current ? ' · cancelled' : ''}`);
     if (failures.length > 0) {
       setError(`${failures.length === 10 && failed > 10 ? 'First 10 of ' : ''}${failed} files could not be imported:\n${failures.join('\n')}`);
     }
     setProgress('');
+  }
+
+  async function importAnnotations(files: FileList | null) {
+    if (!files?.length) return;
+    const selected = Array.from(files);
+    await perform(async () => {
+      if (!storage.current || !datasetSchema || !replaceAnnotations) throw new Error('Confirm annotation replacement before importing.');
+      const imports = await importAnnotationFiles(selected, importFormat, imageIndex, datasetSchema.classes.map(item => item.name));
+      let session: string | undefined;
+      let failure: unknown;
+      try {
+        const started = await storage.current.request({ type: 'annotation-import-start', count: imports.length }, archiveProgressSchema);
+        session = started.session;
+        for (const [index, item] of imports.entries()) {
+          setProgress(`Validating and staging annotations ${index + 1} of ${imports.length}`);
+          await storage.current.request({ type: 'annotation-import-step', session, index, ...item }, archiveProgressSchema);
+        }
+        await storage.current.request({ type: 'archive-finish', session }, archiveFinishedSchema);
+        session = undefined;
+        await initializeSchema(); await refreshIndex(0);
+        setNotice(`Imported annotations for ${imports.length} images atomically. Image pixels and source files were not changed.`);
+        setReplaceAnnotations(false);
+      } catch (error) { failure = error; }
+      finally {
+        setProgress('');
+        if (session && !storage.current.isClosed) {
+          try { await storage.current.request({ type: 'archive-cancel', session }, archiveFinishedSchema); }
+          catch (cleanup) {
+            const original = failure instanceof Error ? failure.message : 'Annotation import did not complete.';
+            const reason = cleanup instanceof Error ? cleanup.message : 'Unknown cleanup error.';
+            storage.current.close();
+            failure = new Error(`${original} Cleanup failed: ${reason} Reopen the workspace to recover staged files.`);
+          }
+        }
+      }
+      if (failure) throw failure;
+    });
   }
 
   async function exportDataset() {
@@ -438,6 +611,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
         const descriptors: { id: string; offset: number; split: YoloSplit; stem: string; outputStem: string; width: number; height: number; sourcePath: string }[] = [];
         const classNames: string[] = [];
         const classIndexes = new Map<string, number>();
+        const cocoSkeletons = new Map<string, { points: string[]; edges: [number, number][] }>();
         const splits = new Set<YoloSplit>();
         const stemCounts = new Map<string, number>();
         let count = 0;
@@ -459,6 +633,15 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
             }
           }
           validateExport(item.document, format);
+          if (format === 'coco') for (const annotation of item.document.annotations) if (annotation.kind === 'keypoints') {
+            const name = item.document.classes.find(cls => cls.id === annotation.classId)!.name;
+            const skeleton = item.document.skeletons.find(skeleton => skeleton.id === annotation.skeletonId)!;
+            const value = { points: skeleton.points, edges: skeleton.edges };
+            if (cocoSkeletons.has(name) && JSON.stringify(cocoSkeletons.get(name)) !== JSON.stringify(value)) {
+              throw new Error('COCO requires one consistent skeleton per category. Choose native JSON to preserve multiple skeletons.');
+            }
+            cocoSkeletons.set(name, value);
+          }
           const basename = item.sourcePath.replaceAll('\\', '/').split('/').at(-1) ?? '';
           const rawStem = basename.replace(/\.[^.]+$/, '');
           const stem = rawStem.replace(/[\u0000-\u001f<>:"/\\|?*]/g, '_')
@@ -511,11 +694,17 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
                   id: index + 1, file_name: `images/${item.outputStem}.png`, width: item.width, height: item.height,
                 })}`;
               }
-              yield `],"categories":${JSON.stringify(classNames.map((name, index) => ({ id: index + 1, name, supercategory: '' })))},"annotations":[`;
+              yield `],"categories":${JSON.stringify(classNames.map((name, index) => {
+                const skeleton = cocoSkeletons.get(name);
+                return { id: index + 1, name, supercategory: '',
+                  ...(skeleton ? { keypoints: skeleton.points, skeleton: skeleton.edges.map(([a, b]) => [a + 1, b + 1]) } : {}) };
+              }))},"annotations":[`;
               let annotationId = 1, first = true;
               for (const [index, item] of items.entries()) {
                 const document = await readDocument(item.id);
-                for (const annotation of cocoAnnotations(document, index + 1, indexesFor(document), annotationId)) {
+                const tiles = maskIds(document).length ? await client.request({ type: 'workspace-mask-read', id: item.id }, maskReadSchema) : [];
+                for (const annotation of cocoAnnotations(document, index + 1, indexesFor(document), annotationId,
+                  new Map(tiles.map(tile => [tile.id, new Uint8Array(tile.pixels)])))) {
                   yield `${first ? '' : ','}${JSON.stringify(annotation)}`;
                   first = false;
                   annotationId++;
@@ -547,6 +736,10 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
             const document = item?.document ?? await readDocument(descriptor.id);
             const file = perImageExport(document, format, indexesFor(document), `${descriptor.outputStem}.png`);
             await writeExportFile(root, `${descriptor.split}/labels/${descriptor.outputStem}.${file.extension}`, file.contents);
+            if (format === 'native' && maskIds(document).length) {
+              const tiles = await client.request({ type: 'workspace-mask-read', id: descriptor.id }, maskReadSchema);
+              for (const tile of tiles) await writeExportFile(root, `masks/${tile.id}.bin`, new Blob([tile.pixels]));
+            }
           }
           setProgress(`Exporting ${i + 1} of ${descriptors.length}`);
         }
@@ -583,6 +776,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
           if (error instanceof DOMException && error.name === 'AbortError') return;
           throw error;
         }
+
         if (mode === 'backup') {
           directory = await directory.getDirectoryHandle(`annotator-backup-${crypto.randomUUID()}`, { create: true });
         }
@@ -621,6 +815,54 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
           }
         }
         setProgress('');
+      }
+      if (failure) throw failure;
+    });
+  }
+
+  async function rotateKey(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const secrets = rotationSecrets;
+    setRotationSecrets({ current: '', next: '', confirmation: '' });
+    cancelArchive.current = false;
+    await perform(async () => {
+      if (!storage.current) throw new Error('Unlock the workspace before rotating its key.');
+      if (secrets.next !== secrets.confirmation) throw new Error('New key-rotation passphrases do not match.');
+      const client = storage.current;
+      let session: string | undefined;
+      let failure: unknown;
+      setRotating(true);
+      try {
+        const started = await client.request({ type: 'vault-rotation-start', current: secrets.current, next: secrets.next }, archiveProgressSchema);
+        session = started.session;
+        for (let index = 0; index < started.count; index++) {
+          if (cancelArchive.current) break;
+          setProgress(`Re-encrypting ${index + 1} of ${started.count}`);
+          await client.request({ type: 'archive-step', session, index }, archiveProgressSchema);
+        }
+        if (cancelArchive.current) {
+          await client.request({ type: 'archive-cancel', session }, archiveFinishedSchema); session = undefined;
+          setNotice('Key rotation cancelled. The old key and passphrase remain active.');
+        } else {
+          const finished = await client.request({ type: 'archive-finish', session }, archiveFinishedSchema); session = undefined;
+          setRecoveryUrl('');
+          await initializeSchema(); await refreshIndex(0);
+          setNotice(finished.cleanupPending
+            ? 'Workspace key rotated; the NEW passphrase is active. Old encrypted-file cleanup failed. Exit and reopen with the new passphrase to finish cleanup.'
+            : 'Workspace key rotated. All current images, masks, and records use a fresh root key. The NEW passphrase is active. Generate a new recovery file; old recovery files no longer work. Existing backups and previously copied data are not revoked.');
+        }
+      } catch (error) { failure = error; }
+      finally {
+        setRotating(false); setProgress('');
+        if (session && !client.isClosed) {
+          try { await client.request({ type: 'archive-cancel', session }, archiveFinishedSchema); }
+          catch (cleanup) {
+            const original = failure instanceof Error ? failure.message : 'Key rotation did not complete.';
+            const reason = cleanup instanceof Error ? cleanup.message : 'Unknown cleanup error.';
+            client.close();
+            failure = new Error(`${original} Cleanup failed: ${reason} Reopen the workspace to recover staged files.`);
+          }
+        }
       }
       if (failure) throw failure;
     });
@@ -712,6 +954,8 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
   }
 
   function chooseTool(next: Tool) {
+    maskStroke.current = null;
+    setStrokePreview([]);
     setTool(next);
     setPolygon([]);
     setBoxStart(null);
@@ -757,6 +1001,8 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
   }
 
   function cancelGesture() {
+    maskStroke.current = null;
+    setStrokePreview([]);
     shapeDrag.current = null;
     panDrag.current = null;
     setShapeDraft(null);
@@ -787,6 +1033,21 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
   function onPointerDown(event: ReactPointerEvent<SVGSVGElement>) {
     if (!current || busy || event.button !== 0) return;
     workspace.current?.focus({ preventScroll: true });
+    if (tool === 'mask' || tool === 'erase') {
+      const selectedMask = current.document.annotations.find(item => item.id === selected && item.kind === 'mask');
+      if (selectedMask?.locked || selectedMask?.visible === false) { setError('Show and unlock this mask before painting.'); return; }
+      if (tool === 'erase' && selectedMask?.kind !== 'mask') { setError('Select a mask before erasing pixels.'); return; }
+      if (!classId) { setError('Add or select a class before painting.'); return; }
+      const mask: Mask = selectedMask?.kind === 'mask' ? selectedMask : {
+        id: crypto.randomUUID(), classId, attributes: {}, kind: 'mask', tileSize: 256, tiles: [],
+        width: current.document.image.canonical.width, height: current.document.image.canonical.height,
+      };
+      const point = pointerPoint(event, current.document);
+      maskStroke.current = { mask, points: [point], erase: tool === 'erase' };
+      setStrokePreview([point]);
+      event.currentTarget.setPointerCapture(event.pointerId);
+      return;
+    }
     if (tool === 'pan') {
       const matrix = event.currentTarget.getScreenCTM();
       if (!matrix) return;
@@ -799,7 +1060,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
       const target = event.target instanceof Element ? event.target.closest('[data-annotation-id]') : null;
       const annotation = current.document.annotations.find(item => item.id === target?.getAttribute('data-annotation-id'));
       setSelected(annotation?.id ?? null);
-      if (annotation) {
+      if (annotation && !annotation.locked) {
         shapeDrag.current = { original: annotation, start: pointerPoint(event, current.document),
           handle: target?.getAttribute('data-handle') ?? null };
         event.currentTarget.setPointerCapture(event.pointerId);
@@ -815,6 +1076,14 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
 
   function onPointerMove(event: ReactPointerEvent<SVGSVGElement>) {
     if (!current) return;
+    if (maskStroke.current) {
+      if (maskStroke.current.points.length >= 4096) {
+        cancelGesture(); setError('Mask stroke is too long. Use shorter strokes.'); return;
+      }
+      maskStroke.current.points.push(pointerPoint(event, current.document));
+      setStrokePreview([...maskStroke.current.points]);
+      return;
+    }
     if (panDrag.current) {
       const drag = panDrag.current;
       const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(drag.inverse);
@@ -827,6 +1096,18 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
   }
 
   function onPointerUp(event: ReactPointerEvent<SVGSVGElement>) {
+    if (maskStroke.current && current) {
+      const stroke = maskStroke.current;
+      stroke.points.push(pointerPoint(event, current.document));
+      cancelGesture();
+      void perform(async () => {
+        const result = paintMask(stroke.mask, maskPixels.current, stroke.points, brushRadius, stroke.erase);
+        if (JSON.stringify(result.mask) === JSON.stringify(stroke.mask)) return;
+        await edit({ type: 'put', annotation: result.mask }, result.tiles);
+        setSelected(result.mask.id);
+      });
+      return;
+    }
     if (panDrag.current) { panDrag.current = null; return; }
     if (shapeDrag.current) {
       const original = shapeDrag.current.original;
@@ -863,8 +1144,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
         annotation.id === selected && annotation.classId === classId && annotation.kind === 'keypoints' && annotation.skeletonId === skeleton.id,
       );
       const missingIndex = selectedAnnotation?.kind === 'keypoints'
-        ? selectedAnnotation.points.findIndex(item => item.visibility === 'absent')
-        : -1;
+        ? pointIndex >= 0 ? pointIndex : selectedAnnotation.points.findIndex(item => item.visibility === 'absent') : -1;
       if (selectedAnnotation?.kind === 'keypoints' && missingIndex >= 0) {
         const points = [...selectedAnnotation.points];
         points[missingIndex] = { ...point, visibility: 'visible' };
@@ -929,6 +1209,8 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
     else if (event.key === '2') chooseTool('polygon');
     else if (event.key === '3') chooseTool('label');
     else if (event.key === '4') chooseTool('keypoints');
+    else if (event.key === '5') chooseTool('mask');
+    else if (event.key === '6') chooseTool('erase');
     else if (event.key.toLowerCase() === 'v') chooseTool('select');
     else if (event.key.toLowerCase() === 'h') chooseTool('pan');
     else if (event.key === '+' || event.key === '=') zoomBy(1.25);
@@ -970,7 +1252,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
       setOfflineReady(false);
       return;
     }
-    const registration = await navigator.serviceWorker.getRegistration('/');
+    const registration = await navigator.serviceWorker.getRegistration(import.meta.env.BASE_URL);
     setOfflineUpdateWaiting(!!registration?.waiting);
     if (!registration?.active) {
       setOfflineReady(false);
@@ -979,7 +1261,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
     const names = (await caches.keys()).filter(name => name.startsWith('annotator-app-shell-'));
     let hasEntryPoint = false;
     for (const name of names) {
-      if (await (await caches.open(name)).match(new URL('/', location.href))) {
+      if (await (await caches.open(name)).match(new URL(import.meta.env.BASE_URL, location.href))) {
         hasEntryPoint = true;
         break;
       }
@@ -989,7 +1271,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
 
   async function installOfflineShell() {
     if (!('serviceWorker' in navigator)) throw new Error('This browser cannot install the offline app shell.');
-    const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    const registration = await navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`, { scope: import.meta.env.BASE_URL });
     await registration.update();
     setOfflineUpdateWaiting(!!registration.waiting);
     if (registration.waiting) {
@@ -1042,7 +1324,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
   }
 
   async function applyOfflineUpdate() {
-    const registration = await navigator.serviceWorker.getRegistration('/');
+    const registration = await navigator.serviceWorker.getRegistration(import.meta.env.BASE_URL);
     if (!registration?.waiting) {
       setOfflineUpdateWaiting(false);
       return;
@@ -1063,18 +1345,43 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
     onBack();
   }
 
+  function lockWorkspace(automatic = false) {
+    if (running.current) return;
+    storage.current?.close(); media.current?.close();
+    storage.current = null; media.current = null; history.current = null;
+    cancelGesture(); setPolygon([]); setCurrent(null); setSelected(null);
+    maskPixels.current.clear(); setMaskUrls(new Map()); setDatasetSchema(null);
+    setThumbnailUrls(new Map());
+    setImageIndex([]); setTotal(0); setPassphrase(''); setAttributeText('{}');
+    setArchivePassphrase(''); setArchiveConfirmation(''); setVaultSecrets({ current: '', next: '', confirmation: '' });
+    setRecoveryCurrent(''); setRecoveryText(''); setRecoveryNext(''); setRecoveryConfirmation(''); setRecoveryUrl('');
+    setRotationSecrets({ current: '', next: '', confirmation: '' });
+    setExportOpen(false); setArchiveMode(null); setSharingOpen(false);
+    setVault(previous => previous ? { ...previous, unlocked: false } : null);
+    setError('');
+    setNotice(automatic ? 'Workspace locked after inactivity. Completed edits are saved; unfinished gestures were discarded.' :
+      'Workspace locked. Completed edits are saved; unfinished gestures were discarded.');
+  }
+
   const imagePosition = current ? imageIndex.findIndex(item => item.id === current.document.image.id) : -1;
   const selectedAnnotation = current?.document.annotations.find(item => item.id === selected);
-  const visibleAnnotations = current?.document.annotations.map(item => shapeDraft?.id === item.id ? shapeDraft : item) ?? [];
-  const activeShape = visibleAnnotations.find(item => item.id === selected);
+  const visibleAnnotations = current?.document.annotations.filter(item => item.visible !== false)
+    .map(item => shapeDraft?.id === item.id ? shapeDraft : item) ?? [];
+  const activeShape = visibleAnnotations.find(item => item.id === selected && !item.locked);
   const handleRadius = current ? current.document.image.canonical.width / view.zoom / 110 : 1;
   const filteredImages = imageIndex.filter(item =>
     item.name.toLowerCase().includes(search.toLowerCase()) &&
     (reviewFilter === 'all' || item.review === reviewFilter));
+  const visiblePage = Math.min(galleryPage, Math.max(0, Math.ceil(filteredImages.length / 100) - 1));
+  const galleryImages = filteredImages.slice(visiblePage * 100, (visiblePage + 1) * 100);
+  const editorMatches = imageIndex.filter(item => item.name.toLowerCase().includes(search.toLowerCase()));
+  const editorResultsPage = Math.min(editorSearchPage, Math.max(0, Math.ceil(editorMatches.length / 100) - 1));
+  const editorStart = search ? editorResultsPage * 100 : Math.floor(Math.max(0, editorMatches.findIndex(item => item.id === current?.document.image.id)) / 100) * 100;
   const activeTool = tools.find(item => item.id === tool)!;
 
   function returnToDataset() {
     cancelGesture(); setPolygon([]); setCurrent(null); setSelected(null); history.current = null;
+    maskPixels.current.clear(); setMaskUrls(new Map());
   }
   function showExport() {
     setError('');
@@ -1103,6 +1410,8 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
         <p>{descriptor.passwordProtected ? 'Password protected · stored on this device' : 'No password · accessible to this browser profile'}</p>
       </div>
       <div className="workspace-heading-actions">
+        {vault?.unlocked && descriptor.passwordProtected && <button type="button" className="text-button" disabled={busy}
+          onClick={() => lockWorkspace()}>Lock workspace</button>}
         <button className="text-button" type="button" disabled={busy} onClick={lockAndReturn}>Exit workspace</button>
       </div>
     </div>
@@ -1121,6 +1430,43 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
       <p>Your passphrase stays on this device. Unlock this workspace to access its dataset.</p>
       <button className="continue-button" disabled={busy}>{vault.exists ? 'Unlock workspace' : 'Create workspace'}</button>
     </form>}
+    {vault && !vault.unlocked && descriptor.passwordProtected && <details>
+      <summary>Recover with a recovery file</summary>
+      <form className="workspace-card" onSubmit={event => {
+        event.preventDefault();
+        const text = recoveryText, next = recoveryNext, confirmation = recoveryConfirmation;
+        setRecoveryText(''); setRecoveryNext(''); setRecoveryConfirmation('');
+        void perform(async () => {
+          if (next !== confirmation) throw new Error('Recovery passphrases do not match. Re-select the file and try again.');
+          let parsed: unknown;
+          try { parsed = JSON.parse(text); } catch { throw new Error('Select a valid recovery JSON file.'); }
+          const checked = recoverySecretSchema.safeParse(parsed);
+          if (!checked.success) throw new Error('This is not a supported recovery-secret file.');
+          if (!storage.current) {
+            storage.current = new WorkerClient(new Worker(new URL('../workers/storage.worker.ts', import.meta.url), { type: 'module' }));
+            await storage.current.request({ type: 'workspace-open', workspaceId: descriptor.id }, statusSchema);
+          }
+          const status = await storage.current.request({ type: 'vault-recovery-use', recovery: checked.data, next }, statusSchema);
+          setVault(status); await initializeSchema(); await refreshIndex(0);
+          setNotice('Workspace recovered. The new passphrase is active; keep the recovery file protected.');
+        });
+      }}>
+        <p>This file is a decryption credential. It only works with this workspace’s surviving browser storage; it is not a dataset backup.</p>
+        <label>Recovery file<input type="file" accept=".json,application/json" disabled={busy} onChange={event => {
+          const file = event.target.files?.[0]; event.target.value = '';
+          if (!file) return;
+          void perform(async () => {
+            if (file.size > 4096) throw new Error('Recovery file exceeds 4 KiB.');
+            setRecoveryText(await file.text());
+          });
+        }} /></label>
+        <label>New recovery passphrase<input type="password" required minLength={12} maxLength={1024}
+          value={recoveryNext} onChange={event => setRecoveryNext(event.target.value)} /></label>
+        <label>Confirm recovery passphrase<input type="password" required minLength={12} maxLength={1024}
+          value={recoveryConfirmation} onChange={event => setRecoveryConfirmation(event.target.value)} /></label>
+        <button type="submit" disabled={busy || !recoveryText}>Recover workspace</button>
+      </form>
+    </details>}
 
     {vault?.unlocked && !datasetSchema && <div className="workspace-card">
       <h2>Preparing dataset schema</h2>
@@ -1172,8 +1518,15 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
             <p className="image-position">{imagePosition + 1} of {total} · Left / Right arrows</p>
             <input className="dataset-search" aria-label="Search images" placeholder="Search images"
               value={search} onChange={event => setSearch(event.target.value)} />
+            {search && editorMatches.length > 100 && <div className="image-navigation search-pagination">
+              <button type="button" disabled={busy || editorResultsPage === 0}
+                onClick={() => setEditorSearchPage(editorResultsPage - 1)}>Previous search results</button>
+              <span>{editorMatches.length} matches</span>
+              <button type="button" disabled={busy || (editorResultsPage + 1) * 100 >= editorMatches.length}
+                onClick={() => setEditorSearchPage(editorResultsPage + 1)}>Next search results</button>
+            </div>}
             <div className="image-file-list">
-              {imageIndex.filter(item => item.name.toLowerCase().includes(search.toLowerCase())).map(item => <button key={item.id} type="button"
+              {editorMatches.slice(editorStart, editorStart + 100).map(item => <button key={item.id} type="button"
                 className={`image-file${item.id === current.document.image.id ? ' active' : ''}`}
                 aria-current={item.id === current.document.image.id ? 'true' : undefined}
                 title={item.sourcePath} disabled={busy} onClick={() => void perform(() => openImage(item.id))}>
@@ -1216,6 +1569,11 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
                   className={`annotation-shape${selectedStyle}`} points={annotation.points.map(point => `${point.x},${point.y}`).join(' ')}
                   fill={color} fillOpacity=".2" stroke={color}
                   strokeWidth="2" vectorEffect="non-scaling-stroke" />;
+                if (annotation.kind === 'mask') return <g key={annotation.id} data-annotation-id={annotation.id}>
+                  {annotation.tiles.map(tile => <image key={tile.blobId} className="annotation-mask"
+                    href={maskUrls.get(tile.blobId)} x={tile.x} y={tile.y}
+                    width={TILE_SIZE} height={TILE_SIZE} style={{ imageRendering: 'pixelated' }} />)}
+                </g>;
                 if (annotation.kind === 'keypoints') {
                   const skeleton = current.document.skeletons.find(item => item.id === annotation.skeletonId);
                   return <g key={annotation.id} data-annotation-id={annotation.id}>
@@ -1245,6 +1603,9 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
                   <circle key={index} className="edit-handle" data-annotation-id={activeShape.id} data-handle={`point-${index}`}
                     cx={point.x} cy={point.y} r={handleRadius} vectorEffect="non-scaling-stroke" />)}
               </g>
+              {strokePreview.length > 0 && <polyline points={strokePreview.map(point => `${point.x},${point.y}`).join(' ')}
+                fill="none" stroke={tool === 'erase' ? '#b84d3b' : '#39764d'} opacity=".5"
+                strokeWidth={brushRadius * 2} strokeLinecap="round" strokeLinejoin="round" pointerEvents="none" />}
               {boxStart && boxEnd && <rect className="annotation-draft"
                 vectorEffect="non-scaling-stroke"
                 x={Math.min(boxStart.x, boxEnd.x)} y={Math.min(boxStart.y, boxEnd.y)}
@@ -1267,6 +1628,10 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
             <p className="panel-help">{tool === 'label'
               ? 'Toggle whole-image labels below. This does not draw on the image.'
               : 'New shapes use the active class. Select an annotation below to edit it.'}</p>
+            {(tool === 'mask' || tool === 'erase') && <label>Brush radius (image pixels)
+              <input aria-label="Brush radius" type="number" min="1" max="128" value={brushRadius}
+                disabled={busy} onChange={event => setBrushRadius(Math.max(1, Math.min(128, Number(event.target.value) || 1)))} />
+            </label>}
             {tool === 'label' && <div className="label-list" aria-label="Image labels">
               {current.document.classes.map(item => {
                 const active = current.document.annotations.some(annotation =>
@@ -1299,13 +1664,76 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
               {current.document.annotations.length === 0 && <p className="empty-copy">No annotations yet.</p>}
             </div>
             {selectedAnnotation && <label className="review-select">Selected annotation class
-              <select value={selectedAnnotation.classId} disabled={busy} onChange={event => {
+              <select value={selectedAnnotation.classId} disabled={busy || selectedAnnotation.locked} onChange={event => {
                 void addAnnotation({ ...selectedAnnotation, classId: event.target.value });
               }}>
                 {current.document.classes.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
               </select>
             </label>}
-            {selected && <button type="button" className="remove-button" disabled={busy}
+            {selectedAnnotation && <fieldset disabled={busy} className="annotation-properties">
+              <legend>Instance properties</legend>
+              <label><input type="checkbox" checked={selectedAnnotation.visible !== false} disabled={selectedAnnotation.locked}
+                onChange={event => void addAnnotation({ ...selectedAnnotation, visible: event.target.checked })} />Visible in editor</label>
+              <label><input type="checkbox" checked={selectedAnnotation.locked === true}
+                onChange={event => void addAnnotation({ ...selectedAnnotation, locked: event.target.checked })} />Lock annotation</label>
+              <p className="panel-help">Visibility affects the editor, not exports. Locking prevents accidental edits; undo can reverse your own actions.</p>
+              <label>Attributes (JSON object)
+                <textarea aria-label="Annotation attributes" value={attributeText} maxLength={32768}
+                  disabled={selectedAnnotation.locked} onChange={event => setAttributeText(event.target.value)} />
+              </label>
+              <button type="button" disabled={selectedAnnotation.locked} onClick={() => void perform(async () => {
+                let attributes: unknown;
+                try { attributes = JSON.parse(attributeText); }
+                catch { throw new Error('Attributes must be a valid JSON object.'); }
+                const parsed = documentSchema.safeParse({ ...current.document, annotations: current.document.annotations.map(
+                  item => item.id === selectedAnnotation.id ? { ...item, attributes } : item) });
+                if (!parsed.success) throw new Error('Invalid attributes. Use up to 64 non-reserved keys with text, finite numbers, or booleans.');
+                await edit({ type: 'put', annotation: parsed.data.annotations.find(item => item.id === selectedAnnotation.id)! });
+              })}>Save attributes</button>
+              {selectedAnnotation.kind !== 'mask' && selectedAnnotation.kind !== 'label' && <button type="button" disabled={selectedAnnotation.locked}
+                onClick={() => void addAnnotation({ ...selectedAnnotation, id: crypto.randomUUID() })}>Duplicate annotation</button>}
+            </fieldset>}
+            {selectedAnnotation?.kind === 'keypoints' && <fieldset disabled={busy || selectedAnnotation.locked}>
+              <legend>Named keypoints</legend>
+              <label>Point to place
+                <select aria-label="Point to place" value={pointIndex} onChange={event => {
+                  setPointIndex(Number(event.target.value)); setTool('keypoints');
+                }}>
+                  <option value="-1">Next absent point</option>
+                  {current.document.skeletons.find(item => item.id === selectedAnnotation.skeletonId)?.points.map((name, index) =>
+                    <option key={name} value={index}>{name}</option>)}
+                </select>
+              </label>
+              {selectedAnnotation.points.map((point, index) => <label key={index}>
+                {current.document.skeletons.find(item => item.id === selectedAnnotation.skeletonId)?.points[index]} visibility
+                <select aria-label={`Point ${index + 1} visibility`} value={point.visibility} onChange={event => {
+                  const visibility = event.target.value;
+                  if (visibility !== 'absent' && visibility !== 'occluded' && visibility !== 'visible') return;
+                  const points: typeof selectedAnnotation.points = selectedAnnotation.points.map((old, i) => i === index ? { ...old, visibility } : old);
+                  void addAnnotation({ ...selectedAnnotation, points });
+                }}>
+                  <option value="absent">Absent</option><option value="occluded">Occluded</option><option value="visible">Visible</option>
+                </select>
+              </label>)}
+            </fieldset>}
+            {selectedAnnotation?.kind === 'polygon' && <fieldset disabled={busy || selectedAnnotation.locked}>
+              <legend>Polygon vertices</legend>
+              <label>Vertex<select aria-label="Polygon vertex" value={vertexIndex} onChange={event => setVertexIndex(Number(event.target.value))}>
+                {selectedAnnotation.points.map((_, index) => <option key={index} value={index}>{index + 1}</option>)}
+              </select></label>
+              <label>New vertex X<input type="number" value={newVertex.x} onChange={event => setNewVertex({ ...newVertex, x: event.target.value })} /></label>
+              <label>New vertex Y<input type="number" value={newVertex.y} onChange={event => setNewVertex({ ...newVertex, y: event.target.value })} /></label>
+              <button type="button" onClick={() => {
+                const points = [...selectedAnnotation.points];
+                points.splice(Math.min(vertexIndex + 1, points.length), 0, { x: Number(newVertex.x), y: Number(newVertex.y) });
+                void addAnnotation({ ...selectedAnnotation, points });
+              }}>Insert vertex after</button>
+              <button type="button" disabled={selectedAnnotation.points.length <= 3} onClick={() => {
+                const points = selectedAnnotation.points.filter((_, index) => index !== vertexIndex);
+                void addAnnotation({ ...selectedAnnotation, points }); setVertexIndex(0);
+              }}>Remove vertex</button>
+            </fieldset>}
+            {selected && <button type="button" className="remove-button" disabled={busy || selectedAnnotation?.locked}
               onClick={() => void perform(() => edit({ type: 'remove', id: selected }))}>Delete selected annotation</button>}
             <label className="review-select">Review
               <select aria-label="Review" value={current.document.review} disabled={busy} onChange={event => {
@@ -1321,10 +1749,18 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
           </aside>
         </div>
       </> : <>
+        <nav aria-label="Dataset pages" className="image-navigation">
+          <button type="button" disabled={busy || visiblePage === 0} onClick={() => setGalleryPage(visiblePage - 1)}>Previous page</button>
+          <span>{filteredImages.length} matching images · Page {visiblePage + 1} of {Math.max(1, Math.ceil(filteredImages.length / 100))}</span>
+          <button type="button" disabled={busy || (visiblePage + 1) * 100 >= filteredImages.length}
+            onClick={() => setGalleryPage(visiblePage + 1)}>Next page</button>
+          <button type="button" disabled={busy || galleryImages.length === 0}
+            onClick={() => void perform(() => loadThumbnails(galleryImages))}>Load page previews</button>
+        </nav>
         <div className="dataset-overview">
           <div><strong>{total}</strong><span>Images in dataset</span></div>
-          <div><strong>{imageIndex.filter(item => item.annotationCount > 0).length}</strong><span>Labeled in loaded page</span></div>
-          <div><strong>{imageIndex.filter(item => item.review === 'reviewed').length}</strong><span>Reviewed in loaded page</span></div>
+          <div><strong>{imageIndex.filter(item => item.annotationCount > 0).length}</strong><span>Labeled images</span></div>
+          <div><strong>{imageIndex.filter(item => item.review === 'reviewed').length}</strong><span>Reviewed images</span></div>
         </div>
         <div className="dataset-filters">
           <input className="dataset-search" aria-label="Search images" placeholder="Search images"
@@ -1350,6 +1786,45 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
             : <button type="button" className="text-button" disabled={busy}
                 onClick={() => void perform(installOfflineShell)}>{offlineReady ? 'Check for app update' : 'Make available offline'}</button>}
         </div>
+        {descriptor.passwordProtected && <label>Lock after inactivity
+          <select aria-label="Lock after inactivity" value={idleMinutes} onChange={event => setIdleMinutes(Number(event.target.value))}>
+            <option value="1">1 minute</option><option value="5">5 minutes</option><option value="15">15 minutes</option>
+            <option value="30">30 minutes</option><option value="0">Never (this session)</option>
+          </select>
+        </label>}
+        {descriptor.passwordProtected && <details className="workspace-recovery">
+          <summary>Recovery secret</summary>
+          <form className="workspace-card" onSubmit={event => {
+            event.preventDefault();
+            const current = recoveryCurrent; setRecoveryCurrent('');
+            void perform(async () => {
+              if (!storage.current) throw new Error('Unlock the workspace first.');
+              const file = await storage.current.request({ type: 'vault-recovery-create', current }, recoverySecretSchema);
+              setRecoveryUrl(URL.createObjectURL(new Blob([JSON.stringify(file)], { type: 'application/json' })));
+              setNotice('New recovery credential created. Download it now. Previous recovery files no longer work.');
+            });
+          }}>
+            <p>Anyone holding this file and the browser storage can decrypt your workspace. Store it separately and securely. Generating another invalidates the previous recovery file, not copies of the data or old vault headers.</p>
+            <label>Current passphrase for recovery<input type="password" required minLength={12} maxLength={1024}
+              value={recoveryCurrent} disabled={busy} onChange={event => setRecoveryCurrent(event.target.value)} /></label>
+            <button type="submit" disabled={busy}>Generate recovery file</button>
+            {recoveryUrl && <a href={recoveryUrl} download={`annotator-recovery-${descriptor.id}.json`}>Download recovery file</a>}
+          </form>
+        </details>}
+        {descriptor.passwordProtected && <details className="workspace-rotation">
+          <summary>Rotate workspace encryption key</summary>
+          <form className="workspace-card" onSubmit={event => void rotateKey(event)}>
+            <p>Creates a fresh root key and stages re-encrypted copies of every image, mask, and record before switching atomically. Requires temporary space for a second encrypted dataset. Cancellation or interruption before publication keeps the old key. Existing backups/copied data are not revoked. Recovery files must be regenerated afterward.</p>
+            <label>Current rotation passphrase<input type="password" required minLength={12} maxLength={1024} disabled={busy}
+              value={rotationSecrets.current} onChange={event => setRotationSecrets({ ...rotationSecrets, current: event.target.value })} /></label>
+            <label>New rotation passphrase<input type="password" required minLength={12} maxLength={1024} disabled={busy}
+              value={rotationSecrets.next} onChange={event => setRotationSecrets({ ...rotationSecrets, next: event.target.value })} /></label>
+            <label>Confirm rotation passphrase<input type="password" required minLength={12} maxLength={1024} disabled={busy}
+              value={rotationSecrets.confirmation} onChange={event => setRotationSecrets({ ...rotationSecrets, confirmation: event.target.value })} /></label>
+            <button type="submit" disabled={busy}>Rotate encryption key</button>
+          </form>
+        </details>}
+        {rotating && <button type="button" onClick={() => { cancelArchive.current = true; }}>Cancel rotation after current item</button>}
         <div className="workspace-actions">
           <label className="folder-button">Add folder
             <input type="file" multiple accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp,.txt,.yaml,.yml"
@@ -1381,6 +1856,28 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
             </form>}
           </div>
         </details>
+        {total > 0 && <details className="annotation-import">
+          <summary>Import annotations</summary>
+          <div className="workspace-card">
+            <p>Match existing images by unique filename (or native image ID). All selected files are validated and staged before one atomic replacement. Image pixels and source folders are unchanged. A failed import publishes nothing.</p>
+            <label>Annotation import format<select aria-label="Annotation import format" value={importFormat} disabled={busy} onChange={event => {
+              const value = event.target.value;
+              if (value === 'native' || value === 'coco' || value === 'voc' || value === 'yolo' || value === 'yolo-seg') setImportFormat(value);
+            }}>
+              <option value="native">Native JSON + mask sidecars</option><option value="coco">COCO JSON (uncompressed RLE)</option>
+              <option value="voc">Pascal VOC boxes</option><option value="yolo">YOLO detection</option><option value="yolo-seg">YOLO segmentation polygons</option>
+            </select></label>
+            <p className="panel-help">Native preserves instance properties, attributes, and review. Training formats preserve supported geometry/classes only; COCO compressed RLE and multipart polygons are rejected, not silently converted. VOC uses enclosing integer boxes; YOLO class order comes from selected data.yaml or the current dataset class list.</p>
+            <label><input type="checkbox" checked={replaceAnnotations} disabled={busy} onChange={event => setReplaceAnnotations(event.target.checked)} />
+              Replace annotations on matched images (make an encrypted backup first)</label>
+            <label className="folder-button">Choose annotation files<input type="file" multiple accept=".json,.xml,.txt,.yaml,.yml,.bin"
+              aria-label="Choose annotation files" disabled={busy || !replaceAnnotations}
+              onChange={event => { void importAnnotations(event.currentTarget.files); event.currentTarget.value = ''; }} /></label>
+            <label className="folder-button">Choose annotation folder<input type="file" multiple {...{ webkitdirectory: '' }}
+              aria-label="Choose annotation folder" disabled={busy || !replaceAnnotations}
+              onChange={event => { void importAnnotations(event.currentTarget.files); event.currentTarget.value = ''; }} /></label>
+          </div>
+        </details>}
         {total === 0 && <label className="workspace-dropzone" onDragOver={event => event.preventDefault()}
           onDrop={event => {
             event.preventDefault();
@@ -1398,7 +1895,9 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
           <input type="file" multiple accept="image/jpeg,image/png,image/webp" disabled={busy} aria-label="Select workspace images"
             onChange={event => { void importFiles(event.currentTarget.files); event.currentTarget.value = ''; }} />
         </label>}
-        <p className="export-disclosure">Import reads YOLOv8 detection labels when data.yaml and matching labels/ files are present. Open an image to annotate it. Export supports six formats, with images or annotations only, and never overwrites the source folder.</p>
+        <label className="export-disclosure"><input type="checkbox" checked={resumeIntake} disabled={busy}
+          onChange={event => setResumeIntake(event.target.checked)} />Resume intake: skip exact source inputs already saved</label>
+        <p className="export-disclosure">To resume after cancellation or reload, enable Resume intake and reselect the original files/folder. Encrypted per-image checkpoints bind source bytes, relative path, and input labels/classes; edited annotations are not overwritten. Older imports and restored backups without checkpoints cannot be skipped automatically. Import reads YOLOv8 detection labels when data.yaml and matching labels/ files are present.</p>
         {progress && <div className="import-progress" role="status">{progress}
           <button type="button" className="text-button" onClick={() => { cancelImport.current = true; }}>Cancel</button>
         </div>}
@@ -1412,7 +1911,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
           </div>}
           {descriptor.passwordProtected && <form className="workspace-card" onSubmit={event => void changePassphrase(event)}>
             <h2>Change workspace passphrase</h2>
-            <p>This protects the existing data key with a new passphrase. It does not rotate that key or change existing backup passphrases. There is no password reset.</p>
+            <p>This protects the existing data key with a new passphrase. It does not rotate that key or change existing backup passphrases. Without your passphrase or an enabled recovery file, the app cannot reset access.</p>
             <label>Current workspace passphrase
               <input type="password" autoComplete="current-password" required minLength={12} maxLength={1024} disabled={busy}
                 value={vaultSecrets.current} onChange={event => setVaultSecrets({ ...vaultSecrets, current: event.target.value })} />
@@ -1429,9 +1928,10 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
           </form>}
         </details>
         <div className="workspace-gallery" aria-label="Workspace images">
-          {filteredImages.map(item => <article className="gallery-item" key={item.id}>
-            <button type="button" className="gallery-open" title={item.sourcePath}
+          {galleryImages.map(item => <article className="gallery-item" key={item.id}>
+            <button type="button" className="gallery-open" title={item.sourcePath} disabled={busy}
               onClick={() => void perform(() => openImage(item.id))}>
+              {thumbnailUrls.has(item.id) && <img className="gallery-thumbnail" src={thumbnailUrls.get(item.id)} alt="" />}
               <span className="gallery-name">{item.name}</span>
               <span className="gallery-path">{item.sourcePath} · {item.split}</span>
               <span>{item.width} × {item.height}</span>
@@ -1440,7 +1940,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
             <button type="button" className="gallery-remove" disabled={busy}
               aria-label={`Remove ${item.name} from dataset`} onClick={() => void removeImage(item.id)}>Remove</button>
           </article>)}
-          {imageIndex.length > 0 && filteredImages.length === 0 && <p className="empty-copy">No loaded images match these filters. Clear the filters or load more images.</p>}
+          {imageIndex.length > 0 && filteredImages.length === 0 && <p className="empty-copy">No images match these filters.</p>}
         </div>
         {total > imageIndex.length && <button type="button" className="text-button"
           onClick={() => void perform(async () => { await refreshIndex(imageIndex.length); })}>Load more</button>}

@@ -1,14 +1,15 @@
 import type { Annotation, AnnotationDocument } from '../domain/model';
 import { signedArea } from '../domain/geometry';
 import { annotationsToYolo } from './yolo';
+import { maskRle } from '../domain/masks';
 
 export const exportFormats = [
   { id: 'yolo', name: 'YOLO detection', detail: 'Normalized bounding boxes and data.yaml.', kinds: ['box'] },
   { id: 'yolo-seg', name: 'YOLO segmentation', detail: 'Normalized polygon vertices and data.yaml.', kinds: ['polygon'] },
-  { id: 'coco', name: 'COCO JSON', detail: 'Bounding boxes and polygon segmentation, grouped by split.', kinds: ['box', 'polygon'] },
+  { id: 'coco', name: 'COCO JSON', detail: 'Boxes, polygons, binary mask RLE, and keypoints, grouped by split. Attributes/review are not training fields.', kinds: ['box', 'polygon', 'mask', 'keypoints'] },
   { id: 'voc', name: 'Pascal VOC XML', detail: 'One XML file per image, with pixel bounding boxes.', kinds: ['box'] },
   { id: 'csv', name: 'CSV annotations', detail: 'One row per annotation; pixel geometry as JSON. Includes labels and keypoints.', kinds: ['box', 'polygon', 'label', 'keypoints'] },
-  { id: 'native', name: 'Native annotation JSON', detail: 'Versioned per-image documents with classes, skeletons, attributes, and review state. Not a restorable vault backup.', kinds: ['box', 'polygon', 'label', 'keypoints'] },
+  { id: 'native', name: 'Native annotation JSON', detail: 'Versioned per-image documents and mask tile sidecars with classes, skeletons, attributes, and review state. Not an encrypted vault backup.', kinds: ['box', 'polygon', 'label', 'keypoints', 'mask'] },
 ] as const;
 export type ExportFormat = typeof exportFormats[number]['id'];
 
@@ -40,6 +41,15 @@ export function validateExport(document: AnnotationDocument, format: ExportForma
   if (format === 'voc') {
     xml(document.image.name);
     document.classes.forEach(item => xml(item.name));
+    for (const annotation of document.annotations) for (const flag of ['difficult', 'truncated']) {
+      const value = annotation.attributes[flag];
+      if (value !== undefined && typeof value !== 'boolean') throw new Error(`Pascal VOC ${flag} must be a boolean attribute.`);
+    }
+  }
+  if (format === 'coco') for (const annotation of document.annotations) {
+    if (annotation.kind === 'mask' && annotation.attributes.iscrowd !== undefined && typeof annotation.attributes.iscrowd !== 'boolean') {
+      throw new Error('COCO mask iscrowd must be a boolean attribute.');
+    }
   }
 }
 
@@ -70,7 +80,7 @@ export function pascalVoc(document: AnnotationDocument, filename: string): strin
     const ymin = Math.min(height, Math.floor(annotation.y) + 1);
     const xmax = Math.max(xmin, Math.min(width, Math.ceil(annotation.x + annotation.width)));
     const ymax = Math.max(ymin, Math.min(height, Math.ceil(annotation.y + annotation.height)));
-    return `  <object><name>${xml(name)}</name><pose>Unspecified</pose><truncated>0</truncated><difficult>0</difficult><bndbox><xmin>${xmin}</xmin><ymin>${ymin}</ymin><xmax>${xmax}</xmax><ymax>${ymax}</ymax></bndbox></object>`;
+    return `  <object><name>${xml(name)}</name><pose>Unspecified</pose><truncated>${annotation.attributes.truncated ? 1 : 0}</truncated><difficult>${annotation.attributes.difficult ? 1 : 0}</difficult><bndbox><xmin>${xmin}</xmin><ymin>${ymin}</ymin><xmax>${xmax}</xmax><ymax>${ymax}</ymax></bndbox></object>`;
   });
   return `<?xml version="1.0" encoding="UTF-8"?>\n<annotation>\n  <filename>${xml(filename)}</filename>\n  <size><width>${width}</width><height>${height}</height><depth>3</depth></size>\n  <segmented>0</segmented>\n${objects.join('\n')}\n</annotation>\n`;
 }
@@ -97,9 +107,20 @@ export function annotationCsv(document: AnnotationDocument, filename: string): s
 
 export function cocoAnnotations(
   document: AnnotationDocument, imageId: number, indexes: ReadonlyMap<string, number>, firstId: number,
+  tiles: ReadonlyMap<string, Uint8Array> = new Map(),
 ) {
   validateExport(document, 'coco');
   return document.annotations.map((annotation, index) => {
+    const base = { id: firstId + index, image_id: imageId, category_id: classIndex(annotation, indexes) + 1 };
+    if (annotation.kind === 'mask') return { ...base, ...maskRle(annotation, tiles), iscrowd: annotation.attributes.iscrowd === true ? 1 : 0 };
+    if (annotation.kind === 'keypoints') {
+      const present = annotation.points.filter(point => point.visibility !== 'absent');
+      const xs = present.map(point => point.x), ys = present.map(point => point.y);
+      const bbox = present.length ? [Math.min(...xs), Math.min(...ys), Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)] : [0, 0, 0, 0];
+      return { ...base, bbox, area: bbox[2]! * bbox[3]!, iscrowd: 0,
+        keypoints: annotation.points.flatMap(point => point.visibility === 'absent' ? [0, 0, 0] :
+          [point.x, point.y, point.visibility === 'occluded' ? 1 : 2]), num_keypoints: present.length };
+    }
     let bbox: number[], area: number, segmentation: number[][] = [];
     if (annotation.kind === 'box') {
       bbox = [annotation.x, annotation.y, annotation.width, annotation.height];

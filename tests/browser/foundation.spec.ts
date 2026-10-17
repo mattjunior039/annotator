@@ -936,7 +936,438 @@ test('encrypted backup restores shared definitions from an empty dataset without
   await expect(page.locator('.gallery-item')).toHaveCount(0);
 });
 
+test('binary mask brush and erase preserve exact pixels through undo, reload, native sidecars, and COCO RLE', async ({ page }) => {
+  await mockFolderExport(page);
+  await page.goto('/');
+  await enterEmptyWorkspace(page);
+  await page.getByLabel('Add images', { exact: true }).setInputFiles(fixture('metadata.png'));
+  await page.locator('.gallery-open').click();
+  const canvas = page.getByRole('img', { name: 'metadata.png annotation canvas', exact: true });
+  const stroke = async () => {
+    const coordinates = await canvas.evaluate(element => {
+      const matrix = (element as SVGSVGElement).getScreenCTM();
+      if (!matrix) throw new Error('Canvas unavailable.');
+      return [new DOMPoint(5, 5), new DOMPoint(10, 8)].map(point => {
+        const p = point.matrixTransform(matrix); return { x: p.x, y: p.y };
+      });
+    });
+    await page.mouse.move(coordinates[0]!.x, coordinates[0]!.y); await page.mouse.down();
+    await page.mouse.move(coordinates[1]!.x, coordinates[1]!.y, { steps: 4 }); await page.mouse.up();
+    await expect(page.locator('.save-indicator')).toContainText('Saved on this device');
+  };
+  await page.getByRole('button', { name: 'Brush mask', exact: true }).click();
+  await page.getByLabel('Brush radius', { exact: true }).fill('2');
+  await stroke();
+  await expect(canvas.locator('.annotation-mask')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(canvas.locator('.annotation-mask')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Redo', exact: true }).click();
+  await expect(canvas.locator('.annotation-mask')).toHaveCount(1);
+  await page.getByRole('button', { name: 'class_0 · mask', exact: true }).click();
+  await page.getByLabel('Annotation attributes', { exact: true }).fill('{"checked":true,"score":0.95,"note":"mask test"}');
+  await page.getByRole('button', { name: 'Save attributes', exact: true }).click();
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(page.getByLabel('Annotation attributes', { exact: true })).toHaveValue('{}');
+  await page.getByRole('button', { name: 'Redo', exact: true }).click();
+  await expect(page.getByLabel('Annotation attributes', { exact: true })).toHaveValue(/"checked": true/);
+  await page.getByLabel('Visible in editor', { exact: true }).click();
+  await expect(canvas.locator('.annotation-mask')).toHaveCount(0);
+  await page.getByLabel('Visible in editor', { exact: true }).click();
+  await expect(canvas.locator('.annotation-mask')).toHaveCount(1);
+  await page.getByLabel('Lock annotation', { exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Delete selected annotation', exact: true })).toBeDisabled();
+  await page.getByLabel('Lock annotation', { exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Delete selected annotation', exact: true })).toBeEnabled();
+  const exportAs = async (format: string) => {
+    await page.getByRole('button', { name: 'Export dataset', exact: true }).click();
+    await page.getByLabel('Export format', { exact: true }).selectOption(format);
+    await page.getByLabel('Include sanitized PNG images').uncheck();
+    await page.getByRole('button', { name: 'Choose destination & export' }).click();
+    await expect(page.getByRole('dialog')).not.toBeVisible();
+    return page.evaluate(() => (window as unknown as { __exportedFiles: Record<string, string | number[]> }).__exportedFiles);
+  };
+  const first = await exportAs('native');
+  const binary = Object.entries(first).find(([name]) => name.endsWith('.bin'))!;
+  expect(binary[1]).toHaveLength(65536);
+  const area = (binary[1] as number[]).reduce((sum, value) => sum + value, 0);
+  expect(area).toBeGreaterThan(20);
+  const doc = JSON.parse(String(Object.entries(first).find(([name]) => name.includes('/labels/'))![1]));
+  expect(doc.annotations[0].attributes).toEqual({ checked: true, score: 0.95, note: 'mask test' });
+  const coco = await exportAs('coco');
+  const json = JSON.parse(String(Object.entries(coco).find(([name]) => name.endsWith('_annotations.coco.json'))![1]));
+  expect(json.annotations[0].area).toBe(area);
+  expect(json.annotations[0].segmentation.counts.reduce((a: number, b: number) => a + b, 0)).toBe(600);
+  await page.getByRole('button', { name: 'Erase mask', exact: true }).click();
+  await stroke();
+  await expect(canvas.locator('.annotation-mask')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(canvas.locator('.annotation-mask')).toHaveCount(1);
+  await page.reload();
+  await enterEmptyWorkspace(page);
+  await page.locator('.gallery-open').click();
+  await expect(canvas.locator('.annotation-mask')).toHaveCount(1);
+  const reopened = await exportAs('native');
+  const restored = Object.entries(reopened).find(([name]) => name.endsWith('.bin'))!;
+  expect(restored[1]).toEqual(binary[1]);
+});
+
+test('manual and inactivity lock clear the editor and allow password reentry without losing committed work', async ({ page }) => {
+  await page.goto('/');
+  await enterEmptyWorkspace(page);
+  await page.getByLabel('Add images', { exact: true }).setInputFiles(fixture('metadata.png'));
+  await page.locator('.gallery-open').click();
+  await page.getByRole('button', { name: 'Image labels', exact: true }).click();
+  await page.getByRole('button', { name: 'class_0', exact: true }).click();
+  await page.getByRole('button', { name: 'Lock workspace', exact: true }).click();
+  await expect(page.getByRole('img', { name: 'metadata.png annotation canvas' })).toHaveCount(0);
+  await page.getByLabel('Workspace passphrase', { exact: true }).fill('wrong password value');
+  await page.getByRole('button', { name: 'Unlock workspace', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Unable to unlock');
+  await page.getByLabel('Workspace passphrase', { exact: true }).fill(passphrase);
+  await page.getByRole('button', { name: 'Unlock workspace', exact: true }).click();
+  await page.getByLabel('Lock after inactivity').selectOption('1');
+  await page.clock.install();
+  await page.clock.fastForward(61_000);
+  await expect(page.getByRole('button', { name: 'Unlock workspace', exact: true })).toBeVisible();
+  await expect(page.getByText('Workspace locked after inactivity.', { exact: false })).toBeVisible();
+  await page.getByLabel('Workspace passphrase', { exact: true }).fill(passphrase);
+  await page.getByRole('button', { name: 'Unlock workspace', exact: true }).click();
+  await page.locator('.gallery-open').click();
+  await expect(page.getByRole('button', { name: 'class_0 · label', exact: true })).toBeVisible();
+});
+
+test('staged annotation imports roll back on a later invalid image and publish valid batches together', async ({ page }) => {
+  await mockFolderExport(page);
+  await page.goto('/');
+  await enterEmptyWorkspace(page);
+  await page.getByLabel('Add images', { exact: true }).setInputFiles([fixture('metadata.png'), fixture('metadata.webp')]);
+  await expect(page.locator('.gallery-item')).toHaveCount(2);
+  await page.getByRole('button', { name: 'Export dataset', exact: true }).click();
+  await page.getByLabel('Export format', { exact: true }).selectOption('native');
+  await page.getByRole('button', { name: 'Choose destination & export', exact: true }).click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  const documents = await page.evaluate(() => Object.entries((window as unknown as { __exportedFiles: Record<string, string> }).__exportedFiles)
+    .filter(([name]) => name.includes('/labels/') && name.endsWith('.json')).map(([name, text]) => ({
+      name: name.split('/').at(-1)!, document: JSON.parse(text),
+    })));
+  for (const item of documents) item.document.review = 'reviewed';
+  documents[1]!.document.image.canonical.width++;
+  documents[1]!.document.image.source.width++;
+  const files = () => documents.map(item => ({ name: item.name, mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(item.document)) }));
+  await page.getByText('Import annotations', { exact: true }).click();
+  await page.getByLabel('Replace annotations on matched images (make an encrypted backup first)', { exact: true }).check();
+  await page.getByLabel('Choose annotation files', { exact: true }).setInputFiles(files());
+  await expect(page.getByRole('alert')).toBeVisible();
+  await page.reload();
+  await enterEmptyWorkspace(page);
+  await expect(page.locator('.gallery-item')).toHaveCount(2);
+  await page.getByLabel('Review status', { exact: true }).selectOption('reviewed');
+  await expect(page.locator('.gallery-item')).toHaveCount(0);
+  await page.getByLabel('Review status', { exact: true }).selectOption('all');
+  documents[1]!.document.image.canonical.width--;
+  documents[1]!.document.image.source.width--;
+  await page.getByText('Import annotations', { exact: true }).click();
+  await page.getByLabel('Replace annotations on matched images (make an encrypted backup first)', { exact: true }).check();
+  await page.getByLabel('Choose annotation files', { exact: true }).setInputFiles(files());
+  await expect(page.getByText('Imported annotations for 2 images atomically.', { exact: false })).toBeVisible();
+  await page.getByLabel('Review status', { exact: true }).selectOption('reviewed');
+  await expect(page.locator('.gallery-item')).toHaveCount(2);
+  await page.getByLabel('Annotation import format', { exact: true }).selectOption('voc');
+  await page.getByLabel('Replace annotations on matched images (make an encrypted backup first)', { exact: true }).check();
+  const xml = '<annotation><filename>metadata.png</filename><size><width>30</width><height>20</height></size><object><name>Pill</name><difficult>1</difficult><truncated>0</truncated><bndbox><xmin>1</xmin><ymin>2</ymin><xmax>5</xmax><ymax>6</ymax></bndbox></object></annotation>';
+  await page.getByLabel('Choose annotation files', { exact: true }).setInputFiles({
+    name: 'metadata.xml', mimeType: 'application/xml', buffer: Buffer.from(`<!DOCTYPE annotation>${xml}`),
+  });
+  await expect(page.getByRole('alert')).toContainText('DTDs');
+  await page.getByLabel('Choose annotation files', { exact: true }).setInputFiles({
+    name: 'metadata.xml', mimeType: 'application/xml', buffer: Buffer.from(xml),
+  });
+  await expect(page.getByText('Imported annotations for 1 images atomically.', { exact: false })).toBeVisible();
+  await page.getByLabel('Review status', { exact: true }).selectOption('all');
+  await page.locator('.gallery-open').filter({ hasText: 'metadata.png' }).click();
+  const shape = page.getByRole('img', { name: 'metadata.png annotation canvas', exact: true }).locator('.annotation-shape');
+  expect(await shape.evaluate(element => ['x', 'y', 'width', 'height'].map(name => Number(element.getAttribute(name))))).toEqual([0, 1, 5, 5]);
+});
+
+test('workspace deletion requires confirmation, refuses an active editor, and only removes its own namespace', async ({ page, context }) => {
+  await page.goto('/');
+  await enterEmptyWorkspace(page);
+  await page.getByLabel('Add images', { exact: true }).setInputFiles(fixture('metadata.png'));
+  await expect(page.locator('.gallery-item')).toHaveCount(1);
+  const namespace = await page.locator('.workspace').getAttribute('data-workspace-id');
+  const dashboard = await context.newPage();
+  await dashboard.goto('/');
+  await dashboard.getByRole('button', { name: 'Delete workspace Test dataset', exact: true }).click();
+  await expect(dashboard.getByRole('button', { name: 'Permanently delete workspace', exact: true })).toBeDisabled();
+  await dashboard.getByLabel('Type the workspace name to delete', { exact: true }).fill('Test dataset');
+  await dashboard.getByRole('button', { name: 'Permanently delete workspace', exact: true }).click();
+  await expect(dashboard.getByRole('alert')).toContainText('open in another tab');
+  await page.getByRole('button', { name: 'Exit workspace', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'New workspace', exact: true })).toBeEnabled();
+  await dashboard.getByRole('button', { name: 'Permanently delete workspace', exact: true }).click();
+  await expect(dashboard.locator('.workspace-tile')).toHaveCount(0);
+  const names = await dashboard.evaluate(async () => {
+    const names: string[] = [];
+    for await (const [name] of await navigator.storage.getDirectory() as unknown as AsyncIterable<[string, FileSystemHandle]>) names.push(name);
+    return names;
+  });
+  expect(names).not.toContain(`annotator-${namespace}-media`);
+  expect(names).not.toContain(`.annotator-${namespace}-sql`);
+  expect(names).toContain('annotator-workspaces.json');
+  await dashboard.reload();
+  await expect(dashboard.locator('.workspace-tile')).toHaveCount(0);
+});
+
+test('catalog search spans every page while gallery rendering stays bounded to 100 images', async ({ page }) => {
+  await page.goto('/');
+  await enterEmptyWorkspace(page);
+  const buffer = await readFile(fixture('metadata.png'));
+  await page.getByLabel('Add images', { exact: true }).setInputFiles(Array.from({ length: 101 }, (_, index) => ({
+    name: `image-${String(index).padStart(3, '0')}.png`, mimeType: 'image/png', buffer,
+  })));
+  await expect(page.getByText('Import finished · 101 added', { exact: false })).toBeVisible();
+  await expect(page.locator('.gallery-item')).toHaveCount(100);
+  await page.getByRole('button', { name: 'Next page', exact: true }).click();
+  await expect(page.locator('.gallery-item')).toHaveCount(1);
+  await page.getByLabel('Search images', { exact: true }).fill('image-100');
+  await expect(page.locator('.gallery-item')).toHaveCount(1);
+  await expect(page.locator('.gallery-item')).toContainText('image-100.png');
+  await page.locator('.gallery-open').click();
+  await expect(page.getByRole('img', { name: 'image-100.png annotation canvas', exact: true })).toBeVisible();
+  await page.getByLabel('Search images', { exact: true }).fill('image-');
+  await expect(page.locator('.image-file')).toHaveCount(100);
+  await page.getByRole('button', { name: 'Next search results', exact: true }).click();
+  await expect(page.locator('.image-file')).toHaveCount(1);
+  await page.locator('.image-file').click();
+  await expect(page.getByRole('img', { name: 'image-000.png annotation canvas', exact: true })).toBeVisible();
+});
+
+test('intake refuses an almost-full origin before adding images', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator.storage, 'estimate', { value: async () => ({ quota: 1024 * 1024, usage: 1024 * 1024 }) });
+  });
+  await page.goto('/');
+  await enterEmptyWorkspace(page);
+  await page.getByLabel('Add images', { exact: true }).setInputFiles(fixture('metadata.png'));
+  await expect(page.getByRole('alert')).toContainText('No images were added');
+  await expect(page.locator('.gallery-item')).toHaveCount(0);
+});
+
+test('intake checkpoints resume after reload without duplicate images or replacing edited annotations', async ({ page }) => {
+  await page.addInitScript(() => {
+    const post = Worker.prototype.postMessage;
+    let imported = 0;
+    Worker.prototype.postMessage = function(message, transfer) {
+      const state = window as unknown as { __holdIntake?: boolean; __checkpointHeld?: boolean };
+      if (message.payload?.type === 'workspace-import' && ++imported === 2 && state.__holdIntake) {
+        state.__checkpointHeld = true; return;
+      }
+      post.call(this, message, Array.isArray(transfer) ? { transfer } : transfer);
+    };
+  });
+  await page.goto('/');
+  await enterEmptyWorkspace(page);
+  await page.evaluate(() => { (window as unknown as { __holdIntake: boolean }).__holdIntake = true; });
+  await page.getByLabel('Add images', { exact: true }).setInputFiles([fixture('metadata.png'), fixture('metadata.webp')]);
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __checkpointHeld?: boolean }).__checkpointHeld)).toBe(true);
+  await page.reload();
+  await enterEmptyWorkspace(page);
+  await expect(page.locator('.gallery-item')).toHaveCount(1);
+  await page.locator('.gallery-open').click();
+  await page.getByRole('button', { name: 'Image labels', exact: true }).click();
+  await page.getByRole('button', { name: 'class_0', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'class_0 · label', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Dataset', exact: true }).click();
+  await page.getByLabel('Resume intake: skip exact source inputs already saved', { exact: true }).check();
+  await page.getByLabel('Add images', { exact: true }).setInputFiles([fixture('metadata.png'), fixture('metadata.webp')]);
+  await expect(page.getByText('1 already-saved inputs retained', { exact: false })).toBeVisible();
+  await expect(page.locator('.gallery-item')).toHaveCount(2);
+  await page.locator('.gallery-open').filter({ hasText: 'metadata.png' }).click();
+  await expect(page.getByRole('button', { name: 'class_0 · label', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Dataset', exact: true }).click();
+  await page.getByLabel('Add images', { exact: true }).setInputFiles({
+    name: 'metadata.png', mimeType: 'image/webp', buffer: await readFile(fixture('metadata.webp')),
+  });
+  await expect(page.locator('.gallery-item')).toHaveCount(3);
+});
+
+test('encrypted page previews survive reopen, revoke their URLs on lock, and are removed with their image', async ({ page }) => {
+  await page.goto('/');
+  await enterEmptyWorkspace(page);
+  await page.getByLabel('Add images', { exact: true }).setInputFiles(fixture('metadata.png'));
+  await page.getByRole('button', { name: 'Load page previews', exact: true }).click();
+  const preview = page.locator('.gallery-thumbnail');
+  await expect(preview).toBeVisible();
+  expect(await preview.evaluate(async element => {
+    const image = element as HTMLImageElement; await image.decode();
+    return { width: image.naturalWidth, height: image.naturalHeight };
+  })).toEqual({ width: 30, height: 20 });
+  const url = await preview.getAttribute('src');
+  const files = () => page.evaluate(async () => {
+    const root = await navigator.storage.getDirectory();
+    const catalog = JSON.parse(await (await (await root.getFileHandle('annotator-workspaces.json')).getFile()).text());
+    const media = await root.getDirectoryHandle(`annotator-${catalog[0].id}-media`);
+    const output: { name: string; bytes: number[] }[] = [];
+    for await (const [name, handle] of media as unknown as AsyncIterable<[string, FileSystemFileHandle]>) {
+      output.push({ name, bytes: Array.from(new Uint8Array(await (await handle.getFile()).arrayBuffer())) });
+    }
+    return output.sort((a, b) => a.name.localeCompare(b.name));
+  });
+  const before = await files();
+  expect(before).toHaveLength(2);
+  const thumbnail = before.find(file => {
+    const bytes = Uint8Array.from(file.bytes), length = new DataView(bytes.buffer).getUint32(0);
+    return JSON.parse(new TextDecoder().decode(bytes.slice(4, 4 + length))).purpose === 'thumbnail';
+  });
+  expect(thumbnail).toBeDefined();
+  await page.getByRole('button', { name: 'Lock workspace', exact: true }).click();
+  expect(await page.evaluate(url => new Promise(resolve => {
+    const image = new Image(); image.onload = () => resolve(false); image.onerror = () => resolve(true); image.src = url!;
+  }), url)).toBe(true);
+  await page.getByLabel('Workspace passphrase', { exact: true }).fill(passphrase);
+  await page.getByRole('button', { name: 'Unlock workspace', exact: true }).click();
+  await page.getByRole('button', { name: 'Load page previews', exact: true }).click();
+  await expect(preview).toBeVisible();
+  expect(await files()).toEqual(before);
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Remove metadata.png from dataset', exact: true }).click();
+  await expect(page.locator('.gallery-item')).toHaveCount(0);
+  expect(await files()).toHaveLength(0);
+});
+
+test('interrupted key rotation discards new-key staging and retains the original passphrase and data', async ({ page }) => {
+  await mockBackupPicker(page);
+  await page.goto('/');
+  await enterEmptyWorkspace(page);
+  await page.getByLabel('Add images', { exact: true }).setInputFiles([fixture('metadata.png'), fixture('metadata.webp')]);
+  await expect(page.locator('.gallery-item')).toHaveCount(2);
+  await page.getByText('Rotate workspace encryption key', { exact: true }).click();
+  await page.getByLabel('Current rotation passphrase', { exact: true }).fill(passphrase);
+  await page.getByLabel('New rotation passphrase', { exact: true }).fill('new key will not be published');
+  await page.getByLabel('Confirm rotation passphrase', { exact: true }).fill('new key will not be published');
+  await page.evaluate(() => { (window as unknown as { __holdRestore: boolean }).__holdRestore = true; });
+  await page.getByRole('button', { name: 'Rotate encryption key', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => typeof (window as unknown as { __resumeArchive?: () => void }).__resumeArchive)).toBe('function');
+  await page.reload();
+  await enterEmptyWorkspace(page);
+  await expect(page.locator('.gallery-item')).toHaveCount(2);
+  await page.locator('.gallery-open').first().click();
+  await expect(page.locator('svg.annotation-canvas image').first()).toBeVisible();
+  const state = await page.evaluate(async () => {
+    const root = await navigator.storage.getDirectory();
+    const catalog = JSON.parse(await (await (await root.getFileHandle('annotator-workspaces.json')).getFile()).text());
+    const media = await root.getDirectoryHandle(`annotator-${catalog[0].id}-media`);
+    const names: string[] = [];
+    for await (const name of media as unknown as AsyncIterable<[string, FileSystemHandle]>) names.push(name[0]);
+    return names;
+  });
+  expect(state).toHaveLength(2);
+});
+
+test('recovery files reset a forgotten passphrase, reject a revoked file, and retain committed annotations', async ({ page }) => {
+  await page.goto('/');
+  await enterEmptyWorkspace(page);
+  await page.getByLabel('Add images', { exact: true }).setInputFiles(fixture('metadata.png'));
+  const generate = async () => {
+    const link = page.getByRole('link', { name: 'Download recovery file', exact: true });
+    const previous = await link.count() ? await link.getAttribute('href') : null;
+    await page.getByLabel('Current passphrase for recovery', { exact: true }).fill(passphrase);
+    await page.getByRole('button', { name: 'Generate recovery file', exact: true }).click();
+    await expect(page.getByRole('link', { name: 'Download recovery file', exact: true })).toBeVisible();
+    if (previous) await expect(page.getByRole('link', { name: 'Download recovery file', exact: true })).not.toHaveAttribute('href', previous);
+    const download = page.waitForEvent('download');
+    await page.getByRole('link', { name: 'Download recovery file', exact: true }).click();
+    return readFile(await (await download).path());
+  };
+  await page.getByText('Recovery secret', { exact: true }).click();
+  const revoked = await generate();
+  const active = await generate();
+  expect(active.equals(revoked)).toBe(false);
+  await page.getByRole('button', { name: 'Lock workspace', exact: true }).click();
+  await page.getByText('Recover with a recovery file', { exact: true }).click();
+  const next = 'recovered workspace new passphrase';
+  const use = async (buffer: Buffer) => {
+    await page.getByLabel('Recovery file', { exact: true }).setInputFiles({ name: 'recovery.json', mimeType: 'application/json', buffer });
+    await page.getByLabel('New recovery passphrase', { exact: true }).fill(next);
+    await page.getByLabel('Confirm recovery passphrase', { exact: true }).fill(next);
+    await page.getByRole('button', { name: 'Recover workspace', exact: true }).click();
+  };
+  await use(revoked);
+  await expect(page.getByRole('alert')).toContainText('Unable to unlock');
+  await use(active);
+  await expect(page.locator('.gallery-item')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Lock workspace', exact: true }).click();
+  await page.getByLabel('Workspace passphrase', { exact: true }).fill(passphrase);
+  await page.getByRole('button', { name: 'Unlock workspace', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Unable to unlock');
+  await page.getByLabel('Workspace passphrase', { exact: true }).fill(next);
+  await page.getByRole('button', { name: 'Unlock workspace', exact: true }).click();
+  await page.locator('.gallery-open').click();
+  await expect(page.getByRole('img', { name: 'metadata.png annotation canvas' })).toBeVisible();
+});
+
+test('mask backup and staged key rotation preserve pixels and publish the new key atomically', async ({ page }) => {
+  await mockBackupPicker(page);
+  await page.goto('/');
+  await enterEmptyWorkspace(page);
+  await page.getByLabel('Add images', { exact: true }).setInputFiles(fixture('metadata.png'));
+  await page.locator('.gallery-open').click();
+  await page.getByRole('button', { name: 'Brush mask', exact: true }).click();
+  const canvas = page.getByRole('img', { name: 'metadata.png annotation canvas', exact: true });
+  const point = await canvas.evaluate(element => {
+    const matrix = (element as SVGSVGElement).getScreenCTM();
+    if (!matrix) throw new Error('Canvas unavailable.');
+    const p = new DOMPoint(5, 5).matrixTransform(matrix); return { x: p.x, y: p.y };
+  });
+  await page.mouse.move(point.x, point.y); await page.mouse.down(); await page.mouse.up();
+  await expect(canvas.locator('.annotation-mask')).toHaveCount(1);
+  const pixels = () => canvas.locator('.annotation-mask').evaluate(async element => {
+    const image = new Image(); image.src = element.getAttribute('href')!;
+    await image.decode();
+    const canvas = new OffscreenCanvas(256, 256), context = canvas.getContext('2d')!;
+    context.drawImage(image, 0, 0);
+    return Array.from(context.getImageData(0, 0, 256, 256).data).filter((_, index) => index % 4 === 3);
+  });
+  const original = await pixels();
+  await page.getByRole('button', { name: 'Dataset', exact: true }).click();
+  await page.getByRole('button', { name: 'Load page previews', exact: true }).click();
+  await expect(page.locator('.gallery-thumbnail')).toBeVisible();
+  await page.getByRole('button', { name: 'Encrypted backup', exact: true }).click();
+  await page.getByLabel('Backup passphrase', { exact: true }).fill(passphrase);
+  await page.getByLabel('Confirm backup passphrase', { exact: true }).fill(passphrase);
+  await page.getByRole('button', { name: 'Choose destination & back up', exact: true }).click();
+  await expect(page.getByText('Encrypted backup complete', { exact: false })).toBeVisible();
+  await page.getByText('Rotate workspace encryption key', { exact: true }).click();
+  const next = 'rotated completely new root passphrase';
+  await page.getByLabel('Current rotation passphrase', { exact: true }).fill(passphrase);
+  await page.getByLabel('New rotation passphrase', { exact: true }).fill(next);
+  await page.getByLabel('Confirm rotation passphrase', { exact: true }).fill(next);
+  await page.getByRole('button', { name: 'Rotate encryption key', exact: true }).click();
+  await expect(page.getByText('Workspace key rotated.', { exact: false })).toBeVisible();
+  await page.getByRole('button', { name: 'Lock workspace', exact: true }).click();
+  await page.getByLabel('Workspace passphrase', { exact: true }).fill(passphrase);
+  await page.getByRole('button', { name: 'Unlock workspace', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Unable to unlock');
+  await page.getByLabel('Workspace passphrase', { exact: true }).fill(next);
+  await page.getByRole('button', { name: 'Unlock workspace', exact: true }).click();
+  await page.getByRole('button', { name: 'Load page previews', exact: true }).click();
+  await expect(page.locator('.gallery-thumbnail')).toBeVisible();
+  await page.locator('.gallery-open').click();
+  expect(await pixels()).toEqual(original);
+  await page.getByRole('button', { name: 'Exit workspace', exact: true }).click();
+  await page.getByRole('button', { name: 'New workspace', exact: true }).click();
+  await page.getByLabel('Workspace name', { exact: true }).fill('Mask restored');
+  await page.getByRole('button', { name: 'Create workspace', exact: true }).click();
+  await page.getByRole('button', { name: 'Restore backup', exact: true }).click();
+  await page.getByLabel('Backup passphrase', { exact: true }).fill(passphrase);
+  await page.getByRole('button', { name: 'Choose backup folder & restore', exact: true }).click();
+  await expect(page.locator('.gallery-item')).toHaveCount(1);
+  await page.locator('.gallery-open').click();
+  expect(await pixels()).toEqual(original);
+});
+
 test('offline app-shell installation supports offline unlock without caching workspace data', async ({ page, context }) => {
+  await mockFolderExport(page);
   await page.goto('/');
   await enterEmptyWorkspace(page);
   const folder = await mkdtemp(join(os.tmpdir(), 'annotator-offline-'));
@@ -969,7 +1400,57 @@ test('offline app-shell installation supports offline unlock without caching wor
   await expect(page.getByRole('heading', { name: 'Workspaces', exact: true })).toBeVisible();
   await enterEmptyWorkspace(page);
   await page.locator('.gallery-open').filter({ hasText: 'offline_canary_patient.png' }).click();
-  await expect(page.getByRole('img', { name: 'offline_canary_patient.png annotation canvas' })).toBeVisible();
+  const canvas = page.getByRole('img', { name: 'offline_canary_patient.png annotation canvas' });
+  await expect(canvas).toBeVisible();
+  const point = async (x: number, y: number) => canvas.evaluate((element, { x, y }) => {
+    const matrix = (element as SVGSVGElement).getScreenCTM();
+    if (!matrix) throw new Error('Canvas transform unavailable.');
+    const p = new DOMPoint(x, y).matrixTransform(matrix);
+    return { x: p.x, y: p.y };
+  }, { x, y });
+  const first = await point(1, 1), second = await point(12, 12);
+  await page.mouse.move(first.x, first.y); await page.mouse.down();
+  await page.mouse.move(second.x, second.y); await page.mouse.up();
+  await expect(canvas.locator('.annotation-shape')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Polygon', exact: true }).click();
+  for (const [x, y] of [[2, 2], [10, 2], [5, 10]]) {
+    const p = await point(x!, y!); await page.mouse.click(p.x, p.y);
+  }
+  await page.getByRole('button', { name: 'Finish polygon', exact: true }).click();
+  await expect(canvas.locator('.annotation-shape')).toHaveCount(2);
+  await page.getByRole('button', { name: 'Image labels', exact: true }).click();
+  await page.getByRole('button', { name: 'class_0', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'class_0 · label', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Keypoint', exact: true }).click();
+  await page.mouse.click(second.x, second.y);
+  await expect(canvas.locator('.annotation-point')).toHaveCount(1);
+  await expect(page.getByRole('button', { name: 'Brush mask', exact: true })).toBeEnabled();
+  await page.keyboard.press('5');
+  await expect(page.getByRole('button', { name: 'Brush mask', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  const mask = await point(22, 12);
+  await page.mouse.move(mask.x, mask.y); await page.mouse.down(); await page.mouse.up();
+  await expect(canvas.locator('.annotation-mask')).toHaveCount(1);
+  await expect(page.getByRole('button', { name: 'Erase mask', exact: true })).toBeEnabled();
+  await page.keyboard.press('6');
+  await expect(page.getByRole('button', { name: 'Erase mask', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await page.mouse.move(mask.x, mask.y); await page.mouse.down(); await page.mouse.up();
+  await expect(canvas.locator('.annotation-mask')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(canvas.locator('.annotation-mask')).toHaveCount(1);
+  await page.reload();
+  await enterEmptyWorkspace(page);
+  await page.getByRole('button', { name: 'Load page previews', exact: true }).click();
+  await expect(page.locator('.gallery-thumbnail')).toBeVisible();
+  await page.locator('.gallery-open').click();
+  await expect(canvas.locator('.annotation-shape')).toHaveCount(2);
+  await expect(canvas.locator('.annotation-mask')).toHaveCount(1);
+  await expect(canvas.locator('.annotation-point')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Export dataset', exact: true }).click();
+  await page.getByLabel('Export format', { exact: true }).selectOption('native');
+  await page.getByRole('button', { name: 'Choose destination & export', exact: true }).click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  const exported = await page.evaluate(() => Object.keys((window as unknown as { __exportedFiles: Record<string, unknown> }).__exportedFiles));
+  expect(exported.some(name => name.endsWith('.bin'))).toBe(true);
   await context.setOffline(false);
 });
 

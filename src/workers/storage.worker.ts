@@ -32,7 +32,7 @@ self.onmessage = async (event: MessageEvent<unknown>) => {
   busy = true;
   try {
     const request = storageRequestSchema.parse(payload);
-    if (request.type === 'catalog-list' || request.type === 'catalog-create') {
+    if (request.type === 'catalog-list' || request.type === 'catalog-create' || request.type === 'catalog-delete') {
       if (store) throw new Error('Workspace must be exited before changing the workspace catalog.');
       const value = await VaultStore.handleCatalog(request);
       self.postMessage({ version: 1, id, ok: true, value });

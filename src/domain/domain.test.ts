@@ -82,6 +82,16 @@ describe('versioned runtime schemas', () => {
   });
 });
 describe('revision-bound, per-image command history', () => {
+  it('protects locked instances without preventing explicit unlock or local undo', () => {
+    const history = new ImageHistory(document());
+    const locked = { ...box, locked: true };
+    history.execute({ type: 'put', annotation: locked }, 0);
+    expect(() => history.execute({ type: 'remove', id: box.id }, 1)).toThrow('Unlock');
+    expect(() => history.execute({ type: 'put', annotation: { ...locked, x: 5 } }, 1)).toThrow('Unlock');
+    history.execute({ type: 'put', annotation: { ...locked, locked: false } }, 1);
+    expect(history.undo(2).annotations[0]?.locked).toBe(true);
+    expect(history.undo(3).annotations).toEqual([]);
+  });
   it('applies valid commands, undoes/redoes order, and invalidates redo on new edits', () => {
     const history = new ImageHistory(document()), second = { ...box, id: crypto.randomUUID() };
     history.execute({ type: 'put', annotation: box }, 0);

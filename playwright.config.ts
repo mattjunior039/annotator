@@ -4,6 +4,7 @@ const port = Number(process.env.PLAYWRIGHT_PORT ?? 4173);
 
 export default defineConfig({
   testDir: './tests/browser',
+  testMatch: 'foundation.spec.ts',
   fullyParallel: false,
   workers: 1,
   timeout: 60_000,

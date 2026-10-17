@@ -37,7 +37,8 @@ export const imageSchema = z.strictObject({
   return expected.width === i.canonical.width && expected.height === i.canonical.height;
 }, 'Canonical dimensions must match EXIF orientation.');
 
-const common = { id: idSchema, classId: idSchema, attributes: attributesSchema };
+const common = { id: idSchema, classId: idSchema, attributes: attributesSchema,
+  visible: z.boolean().optional(), locked: z.boolean().optional() };
 export const annotationSchema = z.discriminatedUnion('kind', [
   z.strictObject({
     ...common, kind: z.literal('box'), x: z.number().finite().nonnegative(),

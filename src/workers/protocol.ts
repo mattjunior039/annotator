@@ -1,7 +1,8 @@
 import { z } from 'zod';
-import { MAX_OBJECT_BYTES } from '../crypto/vault';
+import { MAX_OBJECT_BYTES, recoverySecretSchema } from '../crypto/vault';
 import { documentSchema } from '../domain/model';
 import { datasetSchemaSchema } from '../domain/dataset-schema';
+import { maskTileSchema } from '../domain/masks';
 
 const bufferSchema = z.instanceof(ArrayBuffer).refine(b => b.byteLength <= MAX_OBJECT_BYTES, 'Proof object exceeds 8 MiB.');
 const workspaceBufferSchema = z.instanceof(ArrayBuffer).refine(b => b.byteLength <= MAX_OBJECT_BYTES, 'Image exceeds the current 8 MiB workspace limit.');
@@ -12,6 +13,7 @@ export const workspaceIdSchema = z.union([z.literal('legacy'), z.uuid()]);
 export const workspaceDescriptorSchema = z.strictObject({
   id: workspaceIdSchema, name: z.string().trim().min(1).max(100),
   passwordProtected: z.boolean(), createdAt: z.string().datetime(),
+  deleting: z.boolean().optional(),
 });
 export type WorkspaceDescriptor = z.infer<typeof workspaceDescriptorSchema>;
 export const workspaceCatalogSchema = z.array(workspaceDescriptorSchema).max(100);
@@ -19,6 +21,7 @@ export const storageRequestSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('catalog-list') }),
   z.strictObject({ type: z.literal('catalog-create'), name: z.string().trim().min(1).max(100),
     passwordProtected: z.boolean(), passphrase: z.string().max(1024) }),
+  z.strictObject({ type: z.literal('catalog-delete'), workspaceId: workspaceIdSchema, confirmation: z.string().max(100) }),
   z.strictObject({ type: z.literal('workspace-open'), workspaceId: workspaceIdSchema }),
   z.strictObject({ type: z.literal('schema-open') }),
   z.strictObject({ type: z.literal('schema-step'), index: z.number().int().nonnegative().max(10_000) }),
@@ -28,6 +31,9 @@ export const storageRequestSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('create'), passphrase: z.string().min(12).max(1024) }),
   z.strictObject({ type: z.literal('unlock'), passphrase: z.string().min(12).max(1024) }),
   z.strictObject({ type: z.literal('vault-passphrase'), current: z.string().min(12).max(1024), next: z.string().min(12).max(1024) }),
+  z.strictObject({ type: z.literal('vault-recovery-create'), current: z.string().min(12).max(1024) }),
+  z.strictObject({ type: z.literal('vault-recovery-use'), recovery: recoverySecretSchema, next: z.string().min(12).max(1024) }),
+  z.strictObject({ type: z.literal('vault-rotation-start'), current: z.string().min(12).max(1024), next: z.string().min(12).max(1024) }),
   z.strictObject({
     type: z.literal('save'), note: z.string().max(4096),
     name: z.string().min(1).max(256), media: bufferSchema.nullable(),
@@ -40,13 +46,20 @@ export const storageRequestSchema = z.discriminatedUnion('type', [
     type: z.literal('workspace-import'), document: documentSchema, media: workspaceBufferSchema,
     sourcePath: z.string().min(1).max(1024),
     split: z.enum(['train', 'val', 'test']),
+    intakeFingerprint: z.string().regex(/^[0-9a-f]{64}$/).optional(),
   }),
   z.strictObject({ type: z.literal('workspace-read'), id: z.uuid() }),
-  z.strictObject({ type: z.literal('workspace-update'), id: z.uuid(), expectedRevision: z.number().int().nonnegative(), document: documentSchema }),
+  z.strictObject({ type: z.literal('workspace-thumbnail'), id: z.uuid() }),
+  z.strictObject({ type: z.literal('workspace-mask-read'), id: z.uuid() }),
+  z.strictObject({ type: z.literal('workspace-update'), id: z.uuid(), expectedRevision: z.number().int().nonnegative(), document: documentSchema,
+    tiles: z.array(maskTileSchema).max(64).optional() }),
   z.strictObject({ type: z.literal('workspace-delete'), id: z.uuid() }),
   z.strictObject({ type: z.literal('backup-start'), directory: directorySchema, passphrase: z.string().min(12).max(1024) }),
   z.strictObject({ type: z.literal('restore-start'), directory: directorySchema, passphrase: z.string().min(12).max(1024) }),
-  z.strictObject({ type: z.literal('archive-step'), session: z.uuid(), index: z.number().int().min(0).max(10_000) }),
+  z.strictObject({ type: z.literal('annotation-import-start'), count: z.number().int().min(1).max(10_000) }),
+  z.strictObject({ type: z.literal('annotation-import-step'), session: z.uuid(), index: z.number().int().nonnegative().max(9999),
+    id: z.uuid(), document: documentSchema, tiles: z.array(maskTileSchema).max(128) }),
+  z.strictObject({ type: z.literal('archive-step'), session: z.uuid(), index: z.number().int().min(0).max(10_100) }),
   z.strictObject({ type: z.literal('archive-finish'), session: z.uuid() }),
   z.strictObject({ type: z.literal('archive-cancel'), session: z.uuid() }),
 ]);
@@ -75,6 +88,7 @@ export const workspaceListSchema = z.strictObject({
     width: z.number().int().positive(), height: z.number().int().positive(),
     review: z.enum(['unannotated', 'in_progress', 'annotated', 'reviewed']),
     annotationCount: z.number().int().nonnegative(),
+    intakeFingerprint: z.string().regex(/^[0-9a-f]{64}$/).optional(),
   })).max(100),
 });
 export const workspaceExportInfoSchema = z.strictObject({
@@ -89,18 +103,28 @@ export const workspaceReadSchema = z.strictObject({
   media: z.instanceof(ArrayBuffer),
   sourcePath: z.string().min(1).max(1024),
   split: z.enum(['train', 'val', 'test']),
+  intakeFingerprint: z.string().regex(/^[0-9a-f]{64}$/).optional(),
 });
 export const workspaceWriteSchema = z.strictObject({ id: z.uuid(), revision: z.number().int().nonnegative() });
+export const thumbnailSchema = z.strictObject({
+  media: z.instanceof(ArrayBuffer).refine(bytes => bytes.byteLength <= 128 * 1024),
+});
+export const maskReadSchema = z.array(maskTileSchema).max(128);
 export const workspaceImportSchema = z.strictObject({
   id: z.uuid(), revision: z.number().int().nonnegative(), milliseconds: z.number().nonnegative(),
 });
 export const workspaceDeleteSchema = z.strictObject({ deleted: z.literal(true) });
 export const archiveProgressSchema = z.strictObject({
-  session: z.uuid(), count: z.number().int().min(0).max(10_000), completed: z.number().int().min(0).max(10_000),
+  session: z.uuid(), count: z.number().int().min(0).max(10_100), completed: z.number().int().min(0).max(10_100),
 });
-export const archiveFinishedSchema = z.strictObject({ count: z.number().int().min(0).max(10_000), complete: z.literal(true) });
+export const archiveFinishedSchema = z.strictObject({ count: z.number().int().min(0).max(10_100), complete: z.literal(true),
+  cleanupPending: z.boolean().optional() });
 export const passphraseChangedSchema = z.strictObject({ changed: z.literal(true) });
-export const mediaRequestSchema = z.strictObject({ type: z.literal('sanitize'), file: z.instanceof(File) });
+export const mediaRequestSchema = z.discriminatedUnion('type', [
+  z.strictObject({ type: z.literal('sanitize'), file: z.instanceof(File) }),
+  z.strictObject({ type: z.literal('file-fingerprint'), file: z.instanceof(File), context: z.string().max(MAX_OBJECT_BYTES) }),
+]);
+export const fingerprintSchema = z.strictObject({ fingerprint: z.string().regex(/^[0-9a-f]{64}$/) });
 export const mediaResultSchema = z.strictObject({
   png: z.instanceof(ArrayBuffer), width: z.number().int().positive(),
   height: z.number().int().positive(), inputBytes: z.number().int().positive(),

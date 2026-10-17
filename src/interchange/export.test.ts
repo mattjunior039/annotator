@@ -59,6 +59,8 @@ describe('annotation export formats', () => {
     expect(xml).toContain('<name>pill &amp; &quot;tray&quot;</name>');
     expect(xml).toContain('<filename>image&amp;1.png</filename>');
     expect(xml).toContain('<xmin>11</xmin><ymin>21</ymin><xmax>36</xmax><ymax>50</ymax>');
+    document.annotations[0]!.attributes = { difficult: true, truncated: true };
+    expect(pascalVoc(document, 'image.png')).toContain('<truncated>1</truncated><difficult>1</difficult>');
     document.annotations = [{ ...document.annotations[0]!, kind: 'box', x: 0, y: 0, width: 100, height: 80 }];
     expect(pascalVoc(document, 'image.png')).toContain('<xmin>1</xmin><ymin>1</ymin><xmax>100</xmax><ymax>80</ymax>');
     document.classes[0]!.name = 'invalid\u0001name';
@@ -84,6 +86,9 @@ describe('annotation export formats', () => {
     expect(annotationCsv(document, 'sample.png')).toBe('');
     document.annotations = [{ id: crypto.randomUUID(), classId: document.classes[0]!.id,
       kind: 'mask', attributes: {}, width: 100, height: 80, tileSize: 256, tiles: [] }];
-    for (const { id } of exportFormats) expect(() => validateExport(document, id)).toThrow(/cannot represent mask/);
+    for (const { id } of exportFormats) {
+      if (id === 'native' || id === 'coco') expect(() => validateExport(document, id)).not.toThrow();
+      else expect(() => validateExport(document, id)).toThrow(/cannot represent mask/);
+    }
   });
 });

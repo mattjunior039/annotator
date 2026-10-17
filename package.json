@@ -13,6 +13,7 @@
     "check": "tsc -b",
     "test": "vitest run",
     "test:browser": "npm run fixtures && playwright test",
+    "test:pages": "npm run fixtures && playwright test --config playwright.pages.config.ts",
     "fixtures": "node scripts/fixtures.mjs",
     "benchmark:corpus": "node scripts/corpus.mjs",
     "inventory": "npm sbom --sbom-format cyclonedx"

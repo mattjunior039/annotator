@@ -58,6 +58,15 @@ export class ImageHistory {
   execute(input: unknown, expectedRevision: number): AnnotationDocument {
     this.check(expectedRevision);
     const forward = commandSchema.parse(input);
+    if (forward.type === 'put' || forward.type === 'remove') {
+      const id = forward.type === 'put' ? forward.annotation.id : forward.id;
+      const old = this.doc.annotations.find(annotation => annotation.id === id);
+      if (old?.locked) {
+        const unlocked = forward.type === 'put' && forward.annotation.locked === false &&
+          JSON.stringify({ ...forward.annotation, locked: true }) === JSON.stringify({ ...old, locked: true });
+        if (!unlocked) throw new Error('Unlock this annotation before changing or deleting it.');
+      }
+    }
     const { next, inverse } = mutate(this.doc, forward);
     this.doc = next;
     this.undoEntries.push({ forward, inverse });

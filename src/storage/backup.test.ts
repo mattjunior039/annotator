@@ -5,6 +5,7 @@ import { hex } from '../crypto/vault';
 import { BackupReader, BackupWriter, restoredDocument } from './backup';
 import type { ArchiveDirectory, BackupRecord } from './backup';
 import { emptyDatasetSchema, mergeDatasetSchema } from '../domain/dataset-schema';
+import { paintMask } from '../domain/masks';
 
 class MemoryDirectory implements ArchiveDirectory {
   readonly files = new Map<string, Uint8Array<ArrayBuffer>>();
@@ -69,6 +70,24 @@ beforeAll(async () => {
 });
 
 describe('encrypted native dataset backup', () => {
+  it('round trips exact binary mask pixels and rejects missing, damaged, and substituted tiles', async () => {
+    const painted = paintMask({ id: crypto.randomUUID(), classId: record.document.classes[0]!.id,
+      attributes: {}, kind: 'mask', width: 30, height: 20, tileSize: 256, tiles: [] }, new Map(),
+    [{ x: 5, y: 5 }, { x: 10, y: 6 }], 3, false);
+    const input = structuredClone(record);
+    input.document.annotations = [painted.mask];
+    const directory = new MemoryDirectory(), writer = await BackupWriter.create(directory, passphrase);
+    await writer.append(input, media, painted.tiles); await writer.finish();
+    const reader = await BackupReader.open(directory, passphrase);
+    const result = await reader.read(0);
+    expect(result.record).toEqual(input);
+    expect(result.tiles).toEqual(painted.tiles);
+    const tileFile = `${painted.tiles[0]!.id}.mask.enc`;
+    directory.files.get(tileFile)![100]! ^= 1;
+    await expect(reader.read(0)).rejects.toThrow('damaged');
+    directory.files.delete(tileFile);
+    await expect(reader.read(0)).rejects.toThrow('Missing');
+  });
   it('retains a dataset-wide schema even in an empty backup and keeps it encrypted', async () => {
     const schema = mergeDatasetSchema(emptyDatasetSchema(), record.document);
     const directory = new MemoryDirectory();
@@ -173,7 +192,7 @@ describe('encrypted native dataset backup', () => {
     const mask = structuredClone(record);
     mask.document.annotations = [{
       id: crypto.randomUUID(), classId: mask.document.classes[0]!.id, attributes: {},
-      kind: 'mask', width: 30, height: 20, tileSize: 256, tiles: [],
+      kind: 'mask', width: 30, height: 20, tileSize: 256, tiles: [{ x: 0, y: 0, blobId: crypto.randomUUID() }],
     }];
     await expect(writer.append(mask, media)).rejects.toThrow('mask references');
     expect(directory.files.size).toBe(0);
