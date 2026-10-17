@@ -1,0 +1,9 @@
+{
+  "name": "Private Annotator",
+  "short_name": "Annotator",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff"
+}

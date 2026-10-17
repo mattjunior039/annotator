@@ -1,0 +1,9 @@
+node_modules/
+dist/
+playwright-report/
+test-results/
+tests/fixtures/generated/
+benchmarks/generated/
+sbom.cdx.json
+.DS_Store
+*.tsbuildinfo
