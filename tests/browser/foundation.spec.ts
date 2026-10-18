@@ -163,9 +163,9 @@ test('named workspaces isolate datasets, support optional passwords, and reopen 
   await page.getByRole('button', { name: 'class_0', exact: true }).click();
   await expect(page.getByRole('button', { name: 'class_0 · label', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Dataset', exact: true }).click();
-  await page.getByRole('button', { name: 'Sharing', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Workspace sharing' })).toContainText('not available yet');
-  await page.getByRole('button', { name: 'Close sharing', exact: true }).click();
+  await page.getByRole('button', { name: 'Live share', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Live share' })).toContainText('end-to-end encrypted');
+  await page.getByRole('region', { name: 'Live share' }).getByRole('button', { name: 'Close', exact: true }).click();
   await page.locator('.workspace-security summary').click();
   await expect(page.getByRole('heading', { name: 'No password protection', exact: true })).toBeVisible();
   await exit();

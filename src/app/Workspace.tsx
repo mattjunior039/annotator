@@ -20,7 +20,13 @@ import type { ExportFormat } from '../interchange/export';
 import type { YoloSplit } from '../interchange/yolo';
 import { importAnnotationFiles } from '../interchange/import';
 import type { ImportFormat } from '../interchange/import';
-import { WorkerClient } from '../workers/client';
+import { SerialClient, WorkerClient } from '../workers/client';
+import type { StorageClient } from '../workers/client';
+import { LiveHost } from '../collaboration/host';
+import type { LiveGuest } from '../collaboration/guest';
+import type { ConnectionMode } from '../collaboration/link';
+import type { Participant } from '../collaboration/protocol';
+import { LiveSharePanel, ParticipantList } from './LiveSharePanel';
 import {
   mediaResultSchema, statusSchema, workspaceDeleteSchema, workspaceImportSchema,
   workspaceExportInfoSchema, workspaceListSchema, workspaceReadSchema, workspaceWriteSchema,
@@ -39,6 +45,7 @@ interface WorkspaceProps {
   onPassphraseConsumed: () => void;
   initialTool: Tool;
   onBack: () => void;
+  guest?: LiveGuest | undefined;
 }
 interface IndexItem {
   id: string;
@@ -157,7 +164,7 @@ async function writeExportFile(
   }
 }
 
-export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed, initialTool, onBack }: WorkspaceProps) {
+export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed, initialTool, onBack, guest }: WorkspaceProps) {
   const [vault, setVault] = useState<VaultStatus | null>(null);
   const [passphrase, setPassphrase] = useState('');
   const creationPassphrase = useRef(initialPassphrase);
@@ -239,7 +246,16 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
   const shapeDrag = useRef<ShapeDrag | null>(null);
   const panDrag = useRef<{ start: Point; x: number; y: number; inverse: DOMMatrix } | null>(null);
   const workspace = useRef<HTMLElement>(null);
-  const storage = useRef<WorkerClient | null>(null);
+  const storage = useRef<StorageClient | null>(null);
+  const liveHost = useRef<LiveHost | null>(null);
+  const [liveRevision, setLiveRevision] = useState(0);
+  const [liveMode, setLiveMode] = useState<ConnectionMode>('relay');
+  const [liveEnded, setLiveEnded] = useState('');
+  const [participants, setParticipants] = useState<Participant[]>(guest?.participants ?? []);
+  const currentRef = useRef<OpenImage | null>(null);
+  currentRef.current = current;
+  const schemaRef = useRef<DatasetSchema | null>(null);
+  schemaRef.current = datasetSchema;
   const media = useRef<WorkerClient | null>(null);
   const history = useRef<ImageHistory | null>(null);
   const running = useRef(false);
@@ -247,9 +263,35 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
   const svg = useRef<SVGSVGElement>(null);
 
   useEffect(() => () => {
-    storage.current?.close();
+    liveHost.current?.stop();
+    liveHost.current = null;
+    // Guests leave explicitly; StrictMode's simulated unmount must not end the session.
+    if (!guest) storage.current?.close();
     media.current?.close();
   }, []);
+  useEffect(() => {
+    if (!guest) return;
+    guest.setEvents({
+      onCode: () => {},
+      onDocument: applyRemoteDocument,
+      onSchema: schema => {
+        setDatasetSchema(schema);
+        const open = currentRef.current;
+        if (open) void perform(() => openImage(open.document.image.id));
+      },
+      onIndex: () => { void refreshIndex(0).catch(failure => setError(failure instanceof Error ? failure.message : 'Unable to refresh images.')); },
+      onPresence: setParticipants,
+      onEnded: reason => { setLiveEnded(reason); },
+    });
+  });
+  useEffect(() => {
+    const id = current?.document.image.id ?? null;
+    if (guest) guest.setViewing(id);
+    else liveHost.current?.setViewing(id);
+  }, [current?.document.image.id, liveRevision]);
+  useEffect(() => {
+    if (datasetSchema && liveHost.current) liveHost.current.publishSchema(datasetSchema);
+  }, [datasetSchema]);
   useEffect(() => {
     const timer = setTimeout(() => { void perform(openStorage); }, 0);
     return () => clearTimeout(timer);
@@ -322,12 +364,59 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
     }
   }
 
+  function newStorage(): StorageClient {
+    if (guest) return guest.storage;
+    return new SerialClient(new WorkerClient(new Worker(new URL('../workers/storage.worker.ts', import.meta.url), { type: 'module' })));
+  }
+
+  async function startLiveSession() {
+    if (!storage.current || !datasetSchema || liveHost.current) return;
+    setLiveEnded('');
+    liveHost.current = await LiveHost.start({
+      workspaceName: descriptor.name,
+      storage: storage.current,
+      schema: () => schemaRef.current,
+      mode: liveMode,
+      onChange: () => setLiveRevision(value => value + 1),
+      onDocument: applyRemoteDocument,
+      onEnded: reason => {
+        liveHost.current = null;
+        setLiveEnded(reason);
+        setLiveRevision(value => value + 1);
+      },
+    });
+    setLiveRevision(value => value + 1);
+  }
+
+  function stopLiveSession(reason?: string) {
+    liveHost.current?.stop(reason);
+    liveHost.current = null;
+  }
+
+  // Adopt a document saved by another participant, keeping local undo history.
+  function applyRemoteDocument(document: AnnotationDocument) {
+    setImageIndex(previous => previous.map(item => item.id === document.image.id ? {
+      ...item, review: document.review, annotationCount: document.annotations.length,
+    } : item));
+    const open = currentRef.current;
+    if (!open || open.document.image.id !== document.image.id || !history.current) return;
+    if (document.revision < history.current.snapshot().revision) return;
+    history.current.rebase(document);
+    const masks = (doc: AnnotationDocument) => JSON.stringify(doc.annotations.filter(item => item.kind === 'mask'));
+    if (masks(open.document) !== masks(document)) {
+      void loadMaskPixels(document).catch(failure => setError(failure instanceof Error ? failure.message : 'Unable to load masks.'));
+    }
+    setCurrent(previous => previous && previous.document.image.id === document.image.id &&
+      previous.document.revision <= document.revision ? { ...previous, document } : previous);
+    setSelected(previous => document.annotations.some(item => item.id === previous) ? previous : null);
+  }
+
   async function openStorage() {
     const secret = creationPassphrase.current;
     creationPassphrase.current = '';
     onPassphraseConsumed();
     if (!storage.current) {
-      storage.current = new WorkerClient(new Worker(new URL('../workers/storage.worker.ts', import.meta.url), { type: 'module' }));
+      storage.current = newStorage();
     }
     let opened = await storage.current.request({ type: 'workspace-open', workspaceId: descriptor.id }, statusSchema);
     if (!opened.unlocked && secret) opened = await storage.current.request({ type: 'unlock', passphrase: secret }, statusSchema);
@@ -376,6 +465,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
       setProgress(''); setGalleryPage(0);
     }
     setTotal(result.total);
+    if (offset === 0) liveHost.current?.publishIndex();
     setThumbnailUrls(new Map());
     setImageIndex(previous => offset === 0 ? items : [...previous, ...items]);
     return result.total;
@@ -414,7 +504,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
     shapeDrag.current = null;
     panDrag.current = null;
     setView({ zoom: 1, x: 0, y: 0 });
-    setNotice(`Saved on this device · ${checked.revision} edits`);
+    setNotice(guest ? `Live from the host · ${checked.revision} edits` : `Saved on this device · ${checked.revision} edits`);
   }
 
   async function loadMaskPixels(document: AnnotationDocument) {
@@ -439,31 +529,40 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
     setMaskUrls(urls);
   }
 
-  async function persistDocument(next: AnnotationDocument, expectedRevision: number, tiles: MaskTile[] = []) {
+  async function persistDocument(before: AnnotationDocument, next: AnnotationDocument, tiles: MaskTile[] = []) {
     if (!storage.current || !current) throw new Error('Open an image in the local workspace first.');
     setNotice('Saving…');
+    let saved = next;
     try {
-      await storage.current.request({
-        type: 'workspace-update', id: next.image.id, expectedRevision, document: next, tiles,
-      }, workspaceWriteSchema);
-      setCurrent(previous => previous ? { ...previous, document: next } : previous);
-      setSelected(previous => next.annotations.some(item => item.id === previous) ? previous : null);
-      setImageIndex(previous => previous.map(item => item.id === next.image.id ? {
-        ...item, review: next.review, annotationCount: next.annotations.length,
+      const host = liveHost.current;
+      if (host) saved = await host.commitLocal(before, next, tiles);
+      else {
+        await storage.current.request({
+          type: 'workspace-update', id: next.image.id, expectedRevision: before.revision, document: next, tiles,
+        }, workspaceWriteSchema);
+        if (guest) saved = guest.cached(next.image.id) ?? next;
+      }
+      if (saved !== next && history.current && saved.revision >= history.current.snapshot().revision) history.current.rebase(saved);
+      setCurrent(previous => previous && !(previous.document.image.id === saved.image.id && previous.document.revision > saved.revision)
+        ? { ...previous, document: saved } : previous);
+      setSelected(previous => saved.annotations.some(item => item.id === previous) ? previous : null);
+      setImageIndex(previous => previous.map(item => item.id === saved.image.id ? {
+        ...item, review: saved.review, annotationCount: saved.annotations.length,
       } : item));
-      setNotice('Saved on this device');
+      setNotice(guest ? 'Saved to the host workspace' : liveHost.current ? 'Saved on this device · shared live' : 'Saved on this device');
     } catch (failure) {
-      history.current = new ImageHistory(current.document);
+      history.current = new ImageHistory(currentRef.current?.document ?? current.document);
       throw failure;
     }
-    await loadMaskPixels(next);
+    const masks = (doc: AnnotationDocument) => JSON.stringify(doc.annotations.filter(item => item.kind === 'mask'));
+    if (tiles.length || masks(before) !== masks(saved)) await loadMaskPixels(saved);
   }
 
   async function edit(command: unknown, tiles: MaskTile[] = []) {
     if (!history.current || !current) throw new Error('Open an image first.');
     const before = history.current.snapshot();
     const next = history.current.execute(command, before.revision);
-    await persistDocument(next, before.revision, tiles);
+    await persistDocument(before, next, tiles);
   }
 
   async function undoRedo(direction: 'undo' | 'redo') {
@@ -472,7 +571,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
     const next = direction === 'undo'
       ? history.current.undo(before.revision)
       : history.current.redo(before.revision);
-    await persistDocument(next, before.revision);
+    await persistDocument(before, next);
   }
 
   async function importImage(
@@ -501,7 +600,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
     await perform(async () => {
       if (!vault) throw new Error('Open the local workspace first.');
       if (!storage.current) {
-        storage.current = new WorkerClient(new Worker(new URL('../workers/storage.worker.ts', import.meta.url), { type: 'module' }));
+        storage.current = newStorage();
         await storage.current.request({ type: 'workspace-open', workspaceId: descriptor.id }, statusSchema);
       }
       const next = await storage.current.request({
@@ -1031,6 +1130,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
   }
 
   function chooseTool(next: Tool) {
+    if (guest && (next === 'mask' || next === 'erase')) return;
     maskStroke.current = null;
     setStrokePreview([]);
     setTool(next);
@@ -1457,6 +1557,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
   }
 
   function lockAndReturn() {
+    stopLiveSession();
     storage.current?.close();
     media.current?.close();
     storage.current = null;
@@ -1469,6 +1570,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
 
   function lockWorkspace(automatic = false) {
     if (running.current) return;
+    stopLiveSession('The host locked the workspace.');
     storage.current?.close(); media.current?.close();
     storage.current = null; media.current = null; history.current = null;
     cancelGesture(); setPolygon([]); setPolygonCursor(null); setCurrent(null); setSelected(null);
@@ -1518,6 +1620,15 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
     setExportOpen(true);
   }
 
+  if (guest && liveEnded) return <section className="workspace live-ended" aria-label="Live session ended">
+    <div className="workspace-card">
+      <h2>Live session ended</h2>
+      <p role="status">{liveEnded}</p>
+      <p>No images or annotations from this session were kept in this browser.</p>
+      <button type="button" className="continue-button" onClick={lockAndReturn}>Return to start</button>
+    </div>
+  </section>;
+
   return <section ref={workspace} data-workspace-id={descriptor.id} tabIndex={-1} className={`workspace${current ? ' is-editing' : ''}`} onKeyDown={handleKeys}>
     {vault?.unlocked && datasetSchema && <nav className="project-nav" aria-label="Workspace sections">
       <span className="project-name">{descriptor.name}</span>
@@ -1526,15 +1637,21 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
           disabled={busy} onClick={returnToDataset}><span className="step-number" aria-hidden="true">1</span>Dataset</button>
         <span className={current ? 'active project-step' : 'project-step'} aria-current={current ? 'step' : undefined}>
           <span className="step-number" aria-hidden="true">2</span>Annotate</span>
-        <button type="button" className="project-export" disabled={busy || total === 0}
-          onClick={showExport}><span className="step-number" aria-hidden="true">3</span>Export</button>
+        {!guest && <button type="button" className="project-export" disabled={busy || total === 0}
+          onClick={showExport}><span className="step-number" aria-hidden="true">3</span>Export</button>}
       </div>
       <div className="project-nav-utilities">
-        <button type="button" disabled={busy} aria-expanded={sharingOpen} onClick={() => setSharingOpen(previous => !previous)}>Sharing</button>
-        {!current && <button type="button" disabled={busy} onClick={() => {
+        {liveHost.current && liveHost.current.pending.length > 0 && <button type="button" className="live-alert"
+          onClick={() => setSharingOpen(true)}>{liveHost.current.pending.length} waiting to join</button>}
+        {guest ? <span className="live-badge" role="status">Live · {participants.length} {participants.length === 1 ? 'person' : 'people'}</span>
+          : <button type="button" disabled={busy && !liveHost.current} aria-expanded={sharingOpen}
+            className={liveHost.current ? 'live-badge' : undefined}
+            onClick={() => setSharingOpen(previous => !previous)}>{liveHost.current
+              ? `Live · ${liveHost.current.participants.length} ${liveHost.current.participants.length === 1 ? 'person' : 'people'}` : 'Live share'}</button>}
+        {!current && !guest && <button type="button" disabled={busy} onClick={() => {
           setError(''); setArchivePassphrase(''); setArchiveConfirmation(''); setArchiveMode('backup');
         }}>Encrypted backup</button>}
-        {!current && <button type="button" disabled={busy || total !== 0} title="Restore into an empty workspace; existing images are never overwritten." onClick={() => {
+        {!current && !guest && <button type="button" disabled={busy || total !== 0} title="Restore into an empty workspace; existing images are never overwritten." onClick={() => {
           setError(''); setArchivePassphrase(''); setArchiveConfirmation(''); setArchiveMode('restore');
         }}>Restore backup</button>}
       </div>
@@ -1549,7 +1666,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
       <div className="workspace-heading-actions">
         {vault?.unlocked && descriptor.passwordProtected && <button type="button" className="text-button" disabled={busy}
           onClick={() => lockWorkspace()}>Lock workspace</button>}
-        <button className="text-button" type="button" disabled={busy} onClick={lockAndReturn}>Exit workspace</button>
+        <button className="text-button" type="button" disabled={busy && !guest} onClick={lockAndReturn}>{guest ? 'Leave session' : 'Exit workspace'}</button>
       </div>
     </div>
 
@@ -1580,7 +1697,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
           const checked = recoverySecretSchema.safeParse(parsed);
           if (!checked.success) throw new Error('This is not a supported recovery-secret file.');
           if (!storage.current) {
-            storage.current = new WorkerClient(new Worker(new URL('../workers/storage.worker.ts', import.meta.url), { type: 'module' }));
+            storage.current = newStorage();
             await storage.current.request({ type: 'workspace-open', workspaceId: descriptor.id }, statusSchema);
           }
           const status = await storage.current.request({ type: 'vault-recovery-use', recovery: checked.data, next }, statusSchema);
@@ -1614,11 +1731,12 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
       })}>{busy ? 'Preparing...' : 'Resume schema preparation'}</button>
     </div>}
     {vault?.unlocked && datasetSchema && <>
-      {sharingOpen && <section className="workspace-card" aria-label="Workspace sharing">
-        <h2>Sharing</h2>
-        <p>Live collaboration and cloud sync are not available yet. Nothing is being shared or uploaded.</p>
-        <p>For now, export a dataset or make an encrypted backup to transfer manually. Share the backup passphrase separately.</p>
-        <button type="button" className="text-button" onClick={() => setSharingOpen(false)}>Close sharing</button>
+      {sharingOpen && !guest && <LiveSharePanel host={liveHost.current} mode={liveMode} onMode={setLiveMode}
+        onStart={() => void perform(startLiveSession)} onStop={() => { stopLiveSession(); setLiveRevision(value => value + 1); }}
+        ended={liveEnded} busy={busy} images={imageIndex} onClose={() => setSharingOpen(false)} />}
+      {guest && <section className="workspace-card live-share live-guest-bar" aria-label="Live session">
+        <p>You are a guest in <strong>{descriptor.name}</strong>. Edits save to the host's workspace; nothing is stored in this browser.</p>
+        <ParticipantList participants={participants} images={imageIndex} you={guest.you} />
       </section>}
       {current ? <>
         <div className="editor-toolbar" role="toolbar" aria-label="Edit actions">
@@ -1680,7 +1798,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
             </div>
           </nav>
           <div className="drawing-tools" role="toolbar" aria-label="Annotation tools" aria-orientation="vertical">
-            {toolGroups.map(group => <div className="drawing-tool-group" key={group.name}>
+            {toolGroups.filter(group => !guest || group.name !== 'Pixel masks').map(group => <div className="drawing-tool-group" key={group.name}>
               <span className="drawing-tool-group-label">{group.name}</span>
               {group.tools.map(id => {
                 const item = tools.find(candidate => candidate.id === id)!;
@@ -1819,19 +1937,19 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
                   disabled={busy} onClick={() => addClassification(item.id)}>{active ? '✓ ' : ''}{item.name}</button>;
               })}
             </div>}
-            {tool === 'keypoints' && <form className="add-class-form" onSubmit={event => void addSkeletonPoint(event)}>
+            {tool === 'keypoints' && !guest && <form className="add-class-form" onSubmit={event => void addSkeletonPoint(event)}>
               <label htmlFor="new-point">Skeleton points: {current.document.skeletons[0]?.points.join(' · ')}</label>
               <div><input id="new-point" value={newPointName} maxLength={256}
                 onChange={event => setNewPointName(event.target.value)} placeholder="Add point name" />
                 <button type="submit" disabled={busy || !newPointName.trim()}>Add</button></div>
             </form>}
-            <form className="add-class-form" onSubmit={event => void addClass(event)}>
+            {!guest && <form className="add-class-form" onSubmit={event => void addClass(event)}>
               <label htmlFor="new-class">Add a class</label>
               <div><input id="new-class" value={newClass} maxLength={256}
                 onChange={event => setNewClass(event.target.value)} placeholder="e.g. vehicle" />
                 <button type="submit" disabled={busy || !newClass.trim()}>Add</button></div>
-            </form>
-            <p className="panel-help">Classes and skeleton points apply to every image in this workspace.</p>
+            </form>}
+            <p className="panel-help">{guest ? 'Classes are managed by the host.' : 'Classes and skeleton points apply to every image in this workspace.'}</p>
             <div className="annotation-list">
               <div className="list-heading"><strong>Annotations</strong><span>{current.document.annotations.length}</span></div>
               {current.document.annotations.map(annotation => {
@@ -1923,8 +2041,8 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
                 <option value="annotated">Annotated</option><option value="reviewed">Reviewed</option>
               </select>
             </label>
-            <button type="button" className="remove-button" disabled={busy}
-              onClick={() => void removeImage(current.document.image.id)}>Remove image from dataset</button>
+            {!guest && <button type="button" className="remove-button" disabled={busy}
+              onClick={() => void removeImage(current.document.image.id)}>Remove image from dataset</button>}
           </aside>
         </div>
       </> : <>
@@ -1952,6 +2070,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
             </select>
           </label>
         </div>
+        {!guest && <>
         <div className="storage-status">
           <span>{storageInfo || 'Checking local storage…'} · {persistentStorage ? 'protected from automatic eviction' : 'may be cleared by the browser'}</span>
           {!persistentStorage && <button type="button" className="text-button" disabled={busy}
@@ -2206,18 +2325,25 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
             <button type="submit" disabled={busy}>Change passphrase</button>
           </form>}
         </details>
+        </>}
         <div className="workspace-gallery" role="list" aria-label="Workspace images">
           {galleryImages.map(item => <article className="gallery-item" role="listitem" key={item.id}>
             <button type="button" className="gallery-open" title={item.sourcePath} disabled={busy}
               onClick={() => void perform(() => openImage(item.id))}>
               {thumbnailUrls.has(item.id) && <img className="gallery-thumbnail" src={thumbnailUrls.get(item.id)} alt="" />}
               <span className="gallery-name">{item.name}</span>
+              {(liveHost.current?.participants ?? participants).filter(person => person.imageId === item.id).length > 0 &&
+                <span className="live-viewers" aria-label={`Viewing: ${(liveHost.current?.participants ?? participants)
+                  .filter(person => person.imageId === item.id).map(person => person.name).join(', ')}`}>
+                  {(liveHost.current?.participants ?? participants).filter(person => person.imageId === item.id)
+                    .map(person => <span key={person.id} className="live-dot" style={{ background: person.color }} title={person.name} />)}
+                </span>}
               <span className="gallery-path">{item.sourcePath} · {item.split}</span>
               <span>{item.width} × {item.height}</span>
               <span>{item.annotationCount} annotations · {item.review.replace('_', ' ')}</span>
             </button>
-            <button type="button" className="gallery-remove" disabled={busy}
-              aria-label={`Remove ${item.name} from dataset`} onClick={() => void removeImage(item.id)}>Remove</button>
+            {!guest && <button type="button" className="gallery-remove" disabled={busy}
+              aria-label={`Remove ${item.name} from dataset`} onClick={() => void removeImage(item.id)}>Remove</button>}
           </article>)}
           {imageIndex.length > 0 && filteredImages.length === 0 && <p className="empty-copy">No images match these filters.</p>}
         </div>

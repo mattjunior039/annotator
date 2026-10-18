@@ -16,6 +16,9 @@
     "test:pages": "npm run fixtures && playwright test --config playwright.pages.config.ts",
     "test:accessibility": "npm run fixtures && playwright test --config playwright.accessibility.config.ts",
     "fixtures": "node scripts/fixtures.mjs",
+    "signaling": "node services/signaling/node-server.ts",
+    "test:live": "npm run fixtures && playwright test --config playwright.live.config.ts",
+    "test:live:worker": "LIVE_RELAY=worker npm run test:live",
     "benchmark:corpus": "node scripts/corpus.mjs",
     "benchmark:browser": "node scripts/benchmark-browser.mjs",
     "inventory": "npm sbom --sbom-format cyclonedx"
@@ -32,10 +35,12 @@
     "@types/node": "^26.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/ws": "^8.18.2",
     "axe-core": "^4.14.0",
     "sharp": "0.35.5",
     "typescript": "7.0.2",
     "vite": "8.3.4",
-    "vitest": "5.0.5"
+    "vitest": "5.0.5",
+    "ws": "^8.22.0"
   }
 }

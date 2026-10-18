@@ -2,13 +2,28 @@
 
 ## Automated coverage
 
+- Live share unit tests (`src/collaboration/collaboration.test.ts`, `services/signaling/room.test.ts`) cover:
+  - invite round-trip, matching verification codes on both sides, and different codes under key substitution
+  - replay, tamper, and out-of-order frame rejection
+  - chunk round-trip and malformed chunks
+  - concurrent annotation merge, and refusal of guest schema and mask changes
+  - relay room-ID and role validation, the host requirement, and host↔guest-only routing
+  - room-taken, room-full, bad and oversized frames, rate limits, and the host leaving closing the room
+- Live share browser tests (`npm run test:live` against the node relay; `npm run test:live:worker` against the Cloudflare Worker and Durable Object under `wrangler dev`) cover:
+  - host invite and guest name entry, with matching codes on both screens
+  - decline and approval
+  - guest gallery and hidden host-only controls
+  - bidirectional box sync, and merging guest edits with host undo
+  - participant presence and stopping the session
+  - Direct mode upgrading to an encrypted WebRTC data channel and continuing to sync
+  - guest leave
 - Unit tests: eight EXIF geometry transforms, 1,000 viewport round trips, polygon constraints, strict schemas/references/bounds, mask/keypoint/line/label contracts, revision-bound undo/redo ordering and limits.
 - Shared-schema tests: name-based reconciliation with stable canonical IDs, keypoint remapping by name, absent added points, additive/idempotent merges, no input mutation, and explicit rejection of conflicting definitions, duplicate names, stale revisions, and unapproved destructive edits. Migration tests cover used-class remapping versus unused removal, label-merge conflicts without annotation deletion, legacy IDs/point orders, reorder/rename/removal coordinate preservation, occupied versus absent placeholders, and invalid remaps/point definitions.
 - Migration storage/browser tests: injected second-record staging failure and publication failure roll back every record/schema and clear ciphertext-only staging; successful rewrites increment revisions while preserving named coordinates, image identity, review, paths, media references, and annotation counts. Production Chromium exercises no-confirmation unused removal/class merge/reorder, exact per-image loss counts, required coordinate-discard confirmation, cancellation, reload, stale preview after image edits, replay rejection, and old-save refusal. These targeted faults do not certify every quota/power-loss boundary.
 - Crypto tests: AES-256-GCM NIST empty-input vector, wrapping/unlock, wrong passphrase, header binding, no-password device-key reopen/non-extractable import/wrong-key rejection, empty/exact/partial chunks, fresh generations, mutation, truncation, reordering, substitution, and trailing bytes.
 - Structural media tests: PNG CRC vector, output allowlist, malformed/truncated headers, animation/color/depth rejection, source/decoded size guards.
 - Worker lifecycle tests: one in-flight request, validated envelopes/results, unexpected IDs, controlled errors, lock termination, and deadline behavior with unknown commit outcome.
-- Workspace-dashboard browser regression: separate named protected/no-password datasets, password confirmation, direct opening after creation, exit/reload/reopen, wrong password isolation, independent annotations/removal, honest Sharing disclosure, no-password security disclosure, no initial photo picker, and desktop/tablet/narrow-screen layout with a maximum-length workspace name.
+- Workspace-dashboard browser regression: separate named protected/no-password datasets, password confirmation, direct opening after creation, exit/reload/reopen, wrong password isolation, independent annotations/removal, Live share panel disclosure, no-password security disclosure, no initial photo picker, and desktop/tablet/narrow-screen layout with a maximum-length workspace name.
 - Legacy migration browser regressions: a catalog-free schema-3 dataset and a schema-4 SQL catalog migrate to the independent JSON catalog and encrypted shared schema. Preparation is interrupted before schema publication, then restarted on reload; image-by-image scanning runs again rather than accepting a partial schema. **Existing workspace** retains its original passphrase, annotations, and byte-identical encrypted media; previous UUID workspaces remain accessible with their original protection settings.
 - Shared-schema browser regression: define classes before intake, import multiple images, add skeleton points on different images, verify exact preservation of the originally saved point coordinates, add later images, and reopen after reload. Every exported document has identical class/skeleton definitions. Direct worker calls reject stale/destructive schema changes and per-image schema overwrites. Empty-dataset encrypted backup/restore preserves otherwise unreferenced classes after destination reload.
 - Storage-lock browser regressions: closing developer tools releases the legacy writer without losing committed proof data; the dashboard lists/creates workspaces while another tab edits; different datasets edit concurrently with annotations surviving reopen; simultaneous creation in two tabs retains both catalog entries after reload; a second editor of the same dataset is rejected and can retry after exit/termination without reloading. No editing lease is forcibly taken over.

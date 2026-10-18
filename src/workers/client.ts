@@ -10,7 +10,27 @@ export interface WorkerTransport {
   terminate(): void;
 }
 
-export class WorkerClient {
+export interface StorageClient {
+  readonly isClosed: boolean;
+  request<T>(payload: unknown, schema: z.ZodType<T>, transfer?: Transferable[]): Promise<T>;
+  close(reason?: string): void;
+}
+
+// Queues requests so the live-session host and the local editor can share one
+// single-flight storage worker without tripping its concurrency guard.
+export class SerialClient implements StorageClient {
+  private tail: Promise<unknown> = Promise.resolve();
+  constructor(private readonly client: WorkerClient) {}
+  get isClosed(): boolean { return this.client.isClosed; }
+  request<T>(payload: unknown, schema: z.ZodType<T>, transfer: Transferable[] = []): Promise<T> {
+    const next = this.tail.then(() => this.client.request(payload, schema, transfer));
+    this.tail = next.catch(() => {});
+    return next;
+  }
+  close(reason?: string): void { this.client.close(reason); }
+}
+
+export class WorkerClient implements StorageClient {
   private sequence = 0;
   private pending = new Map<number, Pending>();
   private closed = false;

@@ -10,7 +10,9 @@
 6. Explicit annotation export writes the selected format (YOLO, COCO, Pascal VOC, CSV, or native JSON), optionally with sanitized PNGs, as plaintext into a new user-selected local folder outside vault encryption. Filenames and the export manifest may identify the dataset. Only choose destinations where plaintext copies are appropriate.
 7. Explicit **Encrypted backup** encrypts dataset records/media and the manifest inside the storage worker using a separate random backup key and user-confirmed backup passphrase. Only ciphertext and public wrapping metadata reach the selected folder. Restore authenticates and stages the dataset before atomic publication into an empty workspace. Developer proof records and in-memory history are excluded.
 
-No analytics, crash uploads, remote fonts, CDN imports, signaling, STUN/TURN, cloud SDKs, AI services, or automatic model downloads are present. The original source folder is not modified during import, editing, or workspace removal. Development tooling may use a same-origin HMR WebSocket; validate privacy against the production build.
+8. Explicit **Live share** sends requested images and annotation documents to approved guests. They travel as AES-256-GCM frames through the same-origin `/signal` relay, or through a WebRTC data channel in Direct mode. Guests hold them only in memory. Nothing is transmitted until the host starts a session and approves a guest whose verification code matches. See [live-collaboration.md](live-collaboration.md).
+
+No analytics, crash uploads, remote fonts, CDN imports, cloud SDKs, AI services, or automatic model downloads are present. Signaling, and STUN in Direct mode, are contacted only during a live share session. The original source folder is not modified during import, editing, or workspace removal. Development tooling may use a same-origin HMR WebSocket; validate privacy against the production build.
 
 ## Protected and unprotected
 
@@ -28,7 +30,7 @@ An optional downloaded recovery file contains a plaintext 256-bit secret. Togeth
 
 Page thumbnails are generated locally from sanitized canonical media and encrypted before OPFS writes; no plaintext derivative cache is persisted. At most 100 page-preview URLs are retained, revoked on page/filter/image changes or lock. Resumable intake stores source fingerprints and their context only inside encrypted image records. They are not transmitted or exposed as public storage filenames.
 
-Protection mode is chosen at workspace creation. There is no in-place password-mode conversion. Use encrypted backup/restore into a new workspace with the desired protection, verify the restored data, then explicitly delete the old workspace if appropriate. The old source remains intact until deletion; an old unprotected copy remains unprotected. Dashboard deletion checks the exact workspace name and refuses active editors; interrupted deletion stays marked for retry. It cannot promise secure disk erasure. The Sharing panel is informational until collaboration and encrypted cloud sync are implemented; opening it does not transmit data.
+Protection mode is chosen at workspace creation. There is no in-place password-mode conversion. Use encrypted backup/restore into a new workspace with the desired protection, verify the restored data, then explicitly delete the old workspace if appropriate. The old source remains intact until deletion; an old unprotected copy remains unprotected. Dashboard deletion checks the exact workspace name and refuses active editors; interrupted deletion stays marked for retry. It cannot promise secure disk erasure. Opening the Live share panel does not transmit data. Starting a session connects to the relay. Approved guests can view and copy anything they are shown, and removal cannot revoke that.
 
 Not protected against:
 
@@ -42,13 +44,13 @@ Not protected against:
 
 The user can explicitly install a versioned service-worker app shell. It precaches the static application entry point, JavaScript, CSS, WASM, and worker assets; it does not cache workspace media or annotation data. The production Chromium test verifies an offline reload, local unlock, and image access from OPFS. This is a tested browser scenario, not a guarantee for every browser, OS, extension, or managed-device policy.
 
-`connect-src 'self'` permits same-origin requests. It does not itself prevent all exfiltration paths or universally govern WebRTC. The current build has no collaboration, signaling, cloud, AI, or other dataset transport. Browser-managed requests and compromised code are outside a runtime application's complete control.
+`connect-src 'self'` permits same-origin requests. It does not itself prevent all exfiltration paths or universally govern WebRTC. The only dataset transport is a host-started live share session. The relay sees only ciphertext, room IDs, sizes, timing, and connection IPs. Direct mode additionally reveals IP addresses to peers and the STUN server. Browser-managed requests and compromised code are outside a runtime application's complete control.
 
 Service-worker installation and updates are explicit user actions and can contact the app origin while online. A page-level network policy is weaker than a separately served immutable network-denying document. A physical network disconnect or host firewall is stronger evidence that packets cannot leave.
 
 ## Disclosure requirements for later phases
 
-- A live room needs deliberate admission and separate room keys. Relay-only modes must fail closed and acknowledge operators' metadata visibility.
+- Live share (implemented) uses deliberate admission and separate room keys. The relay operator can see the metadata listed above. A future TURN-backed relay-only WebRTC mode must fail closed.
 - Cloud clients must receive ciphertext only; filenames and semantic indexes stay encrypted. Sizes/timing remain observable.
 - A localhost MCP hop does not control what an external AI assistant later sends to its provider. Coordinates/labels can themselves be sensitive.
 - Local pre-mask models are fallible. External vision needs exact flattened crop preview and explicit consent, not an anonymization claim.

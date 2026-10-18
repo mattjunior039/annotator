@@ -391,3 +391,29 @@ button { font: inherit; }
 .gallery-thumbnail { width: 100%; height: 100px; object-fit: contain; background: #f0f2f1; }
 .image-sidebar .search-pagination { display: grid; grid-template-columns: minmax(0, 1fr); float: none; clear: both; margin-bottom: 8px; }
 .search-pagination button { min-width: 0; white-space: normal; }
+
+/* Live share */
+.live-share { max-width: 640px; }
+.live-share h3 { margin: 16px 0 8px; font-size: 14px; }
+.live-facts { padding-left: 18px; color: #4b5148; font-size: 13px; line-height: 1.5; }
+.live-mode { border: 1px solid #e6e8e3; border-radius: 8px; padding: 10px 14px; margin: 12px 0; display: grid; gap: 10px; }
+.live-mode label { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; line-height: 1.45; }
+.live-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+.live-invite { display: grid; gap: 6px; font-weight: 600; font-size: 13px; }
+.live-invite span { display: flex; gap: 8px; }
+.live-invite input { flex: 1; min-width: 0; font-family: ui-monospace, monospace; font-size: 12px; }
+.live-pending { border: 1px solid #e8c766; background: #fffaf0; border-radius: 8px; padding: 6px 14px 14px; margin: 14px 0; }
+.live-request + .live-request { border-top: 1px solid #efe1b4; margin-top: 12px; }
+.live-code { font: 700 28px/1.2 ui-monospace, monospace; letter-spacing: .18em; margin: 6px 0; }
+.live-participants { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 8px; }
+.live-participants li { display: flex; gap: 10px; align-items: center; }
+.live-person { display: grid; flex: 1; }
+.live-person small { color: #6b7167; }
+.live-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.live-badge { background: #e7f2ea; color: #245c34; border-radius: 999px; padding: 4px 10px; font-weight: 600; font-size: 13px; }
+.live-alert { background: #fff1c7; border: 1px solid #e8c766; border-radius: 999px; padding: 4px 10px; font-weight: 600; }
+.live-guest-bar { max-width: none; margin: 8px 16px; padding: 10px 16px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.live-guest-bar p { margin: 0; flex: 1; min-width: 240px; }
+.live-guest-bar .live-participants { margin: 0; display: flex; gap: 14px; flex-wrap: wrap; }
+.live-viewers { display: flex; gap: 3px; }
+.live-join .workspace-card { max-width: 520px; }

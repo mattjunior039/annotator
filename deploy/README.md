@@ -37,3 +37,31 @@ The canonical production response headers are in [headers.ts](headers.ts). Apply
 - Do not add analytics, remote CSP reporting endpoints, or crash telemetry. Avoid sensitive access-log fields; the app never intentionally puts dataset names or keys into request URLs.
 
 Verify your actual deployment with the browser suite and inspect response headers. Build success alone does not verify hosting behavior.
+
+## Live share signaling relay
+
+Live share needs a small WebSocket relay at `/signal` on the app's origin. The static site cannot provide it, so it runs as a separate Cloudflare Worker with a Durable Object, on a route of the same domain. `easyannotate.online` already uses Cloudflare nameservers and is proxied, so a route works without changing DNS or Pages.
+
+One-time deploy:
+
+```sh
+cd services/signaling
+npx wrangler login          # opens a browser to authorize your Cloudflare account
+npx wrangler deploy         # publishes worker.ts and the SignalingRoom Durable Object
+```
+
+[wrangler.toml](../services/signaling/wrangler.toml) sets these:
+
+- **Route** `easyannotate.online/signal*`. Only this path goes to the Worker; every other request still goes to GitHub Pages.
+- **`ALLOWED_ORIGINS`** `https://easyannotate.online`. WebSocket upgrades from other origins get a 403. Use a comma-separated list to add staging origins.
+- **Durable Object** `SignalingRoom`, using the free-tier-compatible SQLite class. One instance per room.
+
+To verify the deployment, `curl -i https://easyannotate.online/signal` should return `426 WebSocket upgrade required.` Then start a live session in the app and open the invite link in a second browser.
+
+Notes:
+
+- The CSP `connect-src 'self'` already covers `wss://easyannotate.online/signal`. No CSP change is needed.
+- Direct mode uses `stun:stun.cloudflare.com:3478`. To use your own STUN/TURN servers, build with `VITE_ICE_SERVERS='[{"urls":"turn:…","username":"…","credential":"…"}]'`. Do not bundle long-lived TURN secrets.
+- To point a build at a relay on a different host, set `VITE_SIGNALING_URL`, and also allow that origin in `connect-src`.
+- For local development, run `npm run signaling` (port 8787). The Vite dev and preview servers proxy `/signal` to it; `SIGNALING_PORT` overrides the port.
+- The relay keeps no data. Cloudflare can still observe connection IPs, timing, room IDs, and ciphertext sizes. See [live-collaboration.md](../docs/live-collaboration.md).

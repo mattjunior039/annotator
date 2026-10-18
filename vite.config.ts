@@ -76,6 +76,11 @@ self.addEventListener('fetch', event => {
   };
 }
 
+// Local development and tests: `npm run signaling` serves the relay that production routes to a Cloudflare Worker.
+const signalingProxy = {
+  '/signal': { target: `ws://127.0.0.1:${process.env.SIGNALING_PORT ?? 8787}`, ws: true },
+};
+
 export default defineConfig({
   optimizeDeps: { exclude: ['@sqlite.org/sqlite-wasm'] },
   worker: { format: 'es' },
@@ -87,8 +92,9 @@ export default defineConfig({
       'Content-Security-Policy': productionHeaders['Content-Security-Policy']
         .replace("style-src 'self'", "style-src 'self' 'unsafe-inline'"),
     },
+    proxy: signalingProxy,
   },
-  preview: { host: '127.0.0.1', strictPort: true, headers: productionHeaders },
+  preview: { host: '127.0.0.1', strictPort: true, headers: productionHeaders, proxy: signalingProxy },
   build: { target: 'es2023', sourcemap: false },
   base: process.env.VITE_BASE_PATH ?? '/',
   plugins: [{ ...offlineShell(), apply: 'build' }],

@@ -8,3 +8,4 @@ sbom.cdx.json
 .DS_Store
 *.tsbuildinfo
 z
+.wrangler/

@@ -51,6 +51,13 @@ export class ImageHistory {
   snapshot(): AnnotationDocument { return structuredClone(this.doc); }
   get canUndo(): boolean { return this.undoEntries.length > 0; }
   get canRedo(): boolean { return this.redoEntries.length > 0; }
+  // Adopt a newer document from another participant while keeping this user's
+  // own undo/redo entries; replays that no longer apply fail validation.
+  rebase(document: unknown): void {
+    const next = documentSchema.parse(document);
+    if (next.image.id !== this.doc.image.id || next.revision < this.doc.revision) throw new Error('Cannot rebase onto an older or different image.');
+    this.doc = next;
+  }
 
   private check(revision: number): void {
     if (revision !== this.doc.revision) throw new Error('Stale image revision.');

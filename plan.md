@@ -300,6 +300,28 @@ Rules:
 
 ## 11. Live collaboration, after local release
 
+**Status (2026-10-17): implemented as host-led live share. See [docs/live-collaboration.md](docs/live-collaboration.md).** It differs from the original sketch below:
+- The host's vault is authoritative. Guest edits are replayed at annotation level instead of syncing through Yjs. Guests keep no persistent replica.
+- Traffic uses an end-to-end encrypted relay by default, with an optional WebRTC direct upgrade.
+- Mask and schema edits from guests are refused.
+
+Done:
+- Invite capability carried in the URL fragment.
+- Host approval with verification codes.
+- Per-peer ECDH session keys.
+- Replay- and tamper-checked frames.
+- Bounded chunking and rate limits.
+- Participant removal and session end.
+- A Cloudflare Worker / Durable Object relay plus a node relay for development.
+- Unit tests, plus end-to-end tests against both relays.
+
+Open:
+- A TURN-backed relay-only WebRTC mode.
+- Owner transfer.
+- Offline guest edits.
+- Multi-network and 8-peer testing.
+- Independent cryptographic review.
+
 ### Room and invitation lifecycle
 
 - Initial scope is a trusted, small editing group: creator admission, up to eight participants, shared annotation edits, presence, and sanitized image transfer. No claim of cryptographically enforced read-only roles for parties who hold the shared room key.
@@ -743,7 +765,7 @@ Implemented since the Phase 1 snapshot:
 - Explicit offline app-shell installation/update handling, offline reload/unlock coverage, single-writer retry, and same-tab proof-worker handoff.
 - Versioned encrypted dataset backups using an independent backup key/passphrase, ciphertext-only local folders, authenticated object membership/digests, verified writes, and a final completion header. Restore into an empty vault authenticates/stages/re-encrypts each item and publishes the dataset atomically. Cancellation, damage, and interruption cannot expose a partially restored dataset. Developer proof records and undo/UI state are intentionally excluded.
 - Workspace passphrase change using fresh wrapping salt/nonce and atomic header publication. This rewraps the existing root, not full data-key rotation; previous backups/headers are not revoked.
-- In-workspace Sharing entry truthfully states that live collaboration and cloud sync are unavailable; manual export and encrypted backup remain available. Developer proofs are isolated behind a collapsed dashboard disclosure.
+- In-workspace Live share entry starts host-led encrypted collaboration (Phase 5); cloud sync is unavailable, and manual export and encrypted backup remain available. Developer proofs are isolated behind a collapsed dashboard disclosure.
 - Fixed the cross-tab dashboard lock: the public workspace list now has independent OPFS JSON storage and a short queued catalog lock. Previous SQL catalogs migrate without moving datasets. Editing locks are per workspace, with explicit SQLite VFS access-handle release; different workspaces can edit concurrently and dashboards remain available. Only a second editor of the same dataset is rejected, with retry after exit/termination. Dashboard focus refreshes the workspace list. A still-running previous-version legacy editor must exit/reload for the one-time catalog upgrade; locks are never forcibly stolen.
 - Added encrypted dataset-wide class and named-skeleton definitions with independent schema revisions. Legacy per-image definitions reconcile by exact name in bounded record-by-record preparation, published only at completion without rewriting media. Reads/exports share canonical IDs; new points are absent while saved coordinates remain exact. Additions apply across existing/future images and reset current-image undo. Explicit migrations now preview class removal/merge and skeleton point reorder/rename/removal: used classes require remapping, no annotations are deleted, and surviving coordinates follow names. Per-image coordinate-loss counts require confirmation only for discarded occupied coordinates. Worker-owned tokens reject stale/replayed plans; encrypted document staging and schema publish in one transaction, incrementing image revisions without rewriting media/masks. Targeted storage failures, legacy/name mapping, UI confirmation/counts, cancellation, reload, and stale-save guards are covered. Per-image saves cannot overwrite shared definitions. Backup/restore preserves schemas even with zero images, and publishes restored schema/records atomically.
 
