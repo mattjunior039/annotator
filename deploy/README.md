@@ -40,6 +40,8 @@ Verify your actual deployment with the browser suite and inspect response header
 
 ## Live share signaling relay
 
+For persistent, approval-based S3 sharing instead of live sessions, configure exact allowed storage origins and bucket CORS as described in [persistent-sharing.md](../docs/persistent-sharing.md#s3-deployment). The Pages build reads the repository Actions variable `VITE_S3_ORIGINS`; the default remains same-origin only. No backend accounts or bucket credentials are deployed.
+
 Live share needs a small WebSocket relay at `/signal` on the app's origin. The static site cannot provide it, so it runs as a separate Cloudflare Worker with a Durable Object, on a route of the same domain. `easyannotate.online` already uses Cloudflare nameservers and is proxied, so a route works without changing DNS or Pages.
 
 One-time deploy:

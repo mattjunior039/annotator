@@ -15,6 +15,11 @@ import { checkMaskPayloads, checkTile, maskIds, TILE_BYTES } from '../domain/mas
 import { hex, recoverySecretSchema } from '../crypto/vault';
 import type { WrappedKey } from '../crypto/vault';
 import type { MaskTile } from '../domain/masks';
+import { toBase64Url } from '../collaboration/encoding';
+import { ShareArchive } from '../sharing/archive';
+import { decryptProposal, encryptProposal, maskDigest, mergeProposal, same } from '../sharing/proposal';
+import { proposalSchema, shareReceiptSchema } from '../sharing/model';
+import type { ProposalPreview, ShareReceipt, ShareProposal, ShareSummary } from '../sharing/model';
 
 const recordSchema = z.strictObject({
   version: z.literal(1), note: z.string().max(4096), name: z.string().min(1).max(256),
@@ -37,11 +42,14 @@ export class VaultStore {
   private schemaScan: { ids: string[]; index: number; schema: DatasetSchema } | undefined;
   private schemaMigration: { preview: SchemaMigrationPreview; previous: DatasetSchema; remaps: ClassRemaps } | undefined;
   private masksPruned = false;
+  private shareExport: { id: string; key: string; bases: AnnotationDocument[] } | undefined;
+  private shareReview: { preview: ProposalPreview; proposal: ShareProposal } | undefined;
   private archive: {
     session: string; index: number; count: number;
     writer?: BackupWriter; reader?: BackupReader; ids: string[]; schema?: DatasetSchema;
     importing?: boolean;
-    rotation?: { root: CryptoKey; header: WrappedKey; proofIds: string[] };
+    rotation?: { root: CryptoKey; header: WrappedKey; proofIds: string[]; shareIds: string[] };
+    share?: { directory?: ShareArchive; key: string; id: string; bases: AnnotationDocument[]; receipt?: ShareReceipt };
   } | undefined;
 
   private constructor(
@@ -64,7 +72,7 @@ export class VaultStore {
     try {
       db.exec('PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL; PRAGMA temp_store=MEMORY;');
       const version = db.selectValue('PRAGMA user_version');
-      if (![0, 1, 2, 3, 4, 5, 6, 7, 8, 9].includes(Number(version))) throw new Error('Unsupported proof database version. Data was not changed.');
+      if (![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].includes(Number(version))) throw new Error('Unsupported proof database version. Data was not changed.');
       db.exec(`BEGIN IMMEDIATE;
         CREATE TABLE IF NOT EXISTS vault (id INTEGER PRIMARY KEY CHECK(id=1), header TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS records (id TEXT PRIMARY KEY, payload BLOB NOT NULL, media_id TEXT);
@@ -78,7 +86,9 @@ export class VaultStore {
         CREATE TABLE IF NOT EXISTS vault_recovery (id INTEGER PRIMARY KEY CHECK(id=1), header TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS rotation_proof (id TEXT PRIMARY KEY, payload BLOB NOT NULL, media_id TEXT);
         CREATE TABLE IF NOT EXISTS thumbnails (image_id TEXT PRIMARY KEY, media_id TEXT NOT NULL UNIQUE);
-        PRAGMA user_version=9;
+        CREATE TABLE IF NOT EXISTS workspace_shares (id TEXT PRIMARY KEY, payload BLOB NOT NULL);
+        CREATE TABLE IF NOT EXISTS rotation_shares (id TEXT PRIMARY KEY, payload BLOB NOT NULL);
+        PRAGMA user_version=10;
         COMMIT;`);
       const opfs = await navigator.storage.getDirectory();
       const media = await opfs.getDirectoryHandle(legacy ? 'annotator-phase1-media' : `annotator-${scope}-media`, { create: true });
@@ -200,6 +210,7 @@ export class VaultStore {
   private async recover(): Promise<void> {
     this.db.exec('DELETE FROM restore_staging');
     this.db.exec('DELETE FROM rotation_proof');
+    this.db.exec('DELETE FROM rotation_shares');
     this.db.exec('DELETE FROM mask_objects WHERE staged=1');
     for (const row of this.db.selectObjects('SELECT id FROM intents')) {
       const id = z.uuid().parse(row.id);
@@ -239,6 +250,58 @@ export class VaultStore {
       throw new Error('Workspace backup or restore is in progress. Finish or cancel it before making other changes.');
     }
     switch (request.type) {
+      case 'share-list': {
+        const summaries: ShareSummary[] = [];
+        for (const id of this.shareIds()) {
+          const { bases: _bases, maskDigests: _digests, ...summary } = await this.readShare(id);
+          summaries.push(summary);
+        }
+        return summaries;
+      }
+      case 'share-export-start': {
+        this.keys();
+        const schema = await this.loadDatasetSchema();
+        if (!schema) throw new Error('Workspace schema must be prepared before sharing.');
+        if (Number(this.db.selectValue('SELECT count(*) FROM workspace_shares')) >= 100) throw new Error('Workspace share limit reached (100 invitations).');
+        const directory = new ShareArchive(), key = toBase64Url(crypto.getRandomValues(new Uint8Array(32)));
+        const writer = await BackupWriter.create(directory, key, schema);
+        const ids = this.db.selectValues('SELECT id FROM workspace_records ORDER BY rowid').map(value => z.uuid().parse(value));
+        this.shareExport = undefined;
+        this.archive = { session: crypto.randomUUID(), index: 0, count: ids.length, ids, writer,
+          share: { directory, key, id: writer.id, bases: [] } };
+        return { session: this.archive.session, count: ids.length, completed: 0, id: writer.id, key };
+      }
+      case 'share-publish': {
+        const exported = this.shareExport;
+        if (!exported || exported.id !== request.invitation.id || exported.key !== request.invitation.key) {
+          throw new Error('Workspace share export is no longer available. Publish a new invitation.');
+        }
+        await this.saveShare({ invitation: request.invitation, role: 'owner', name: request.name,
+          reviewUrl: request.reviewUrl, status: 'open', bases: exported.bases });
+        this.shareExport = undefined;
+        return { complete: true, count: 1 };
+      }
+      case 'share-import-start': {
+        this.keys();
+        if (this.db.selectValue('SELECT count(*) FROM workspace_records') !== 0 ||
+            this.db.selectValue('SELECT count(*) FROM workspace_shares') !== 0) throw new Error('Workspace share import requires a new empty workspace.');
+        const reader = await BackupReader.open(ShareArchive.unpack(request.media), request.invitation.key);
+        if (reader.id !== request.invitation.id) throw new Error('Workspace snapshot belongs to a different invitation.');
+        this.archive = { session: crypto.randomUUID(), index: 0, count: reader.count, ids: [], reader, schema: reader.schema ?? emptyDatasetSchema(),
+          share: { key: request.invitation.key, id: reader.id, bases: [], receipt: {
+            invitation: request.invitation, role: 'contributor', name: request.name, reviewUrl: request.invitation.download, status: 'open', bases: [], maskDigests: {},
+          } } };
+        return { session: this.archive.session, count: reader.count, completed: 0 };
+      }
+      case 'share-proposal': return this.buildShareProposal(request.id, request.author, request.message);
+      case 'share-submitted': {
+        const receipt = await this.readShare(request.id);
+        if (receipt.role !== 'contributor' || receipt.status !== 'open') throw new Error('Workspace proposal is no longer open.');
+        receipt.status = 'submitted'; await this.saveShare(receipt);
+        return { complete: true, count: 1 };
+      }
+      case 'share-review': return this.previewShareProposal(request.id, request.media);
+      case 'share-decide': return this.decideShareProposal(request.token, request.approve);
       case 'catalog-list':
       case 'catalog-create':
       case 'catalog-delete': throw new Error('Workspace must be exited before changing the workspace catalog.');
@@ -270,8 +333,9 @@ export class VaultStore {
         const { root, wrapped } = await createVaultKey(request.next, workspaceId);
         const ids = this.db.selectValues('SELECT id FROM workspace_records ORDER BY rowid').map(value => z.uuid().parse(value));
         const proofIds = this.db.selectValues('SELECT id FROM records ORDER BY rowid').map(value => z.uuid().parse(value));
-        this.archive = { session: crypto.randomUUID(), index: 0, count: ids.length + proofIds.length, ids, schema,
-          rotation: { root, header: wrapped, proofIds } };
+        const shareIds = this.shareIds();
+        this.archive = { session: crypto.randomUUID(), index: 0, count: ids.length + proofIds.length + shareIds.length, ids, schema,
+          rotation: { root, header: wrapped, proofIds, shareIds } };
         return { session: this.archive.session, count: this.archive.count, completed: 0 };
       }
       case 'schema-open': {
@@ -548,6 +612,114 @@ export class VaultStore {
       await this.stageMedia(tile.id, await sealObject(root, workspaceId, tile.id, new Uint8Array(tile.pixels), 'mask'), 'Encrypted media');
     }
   }
+  private async readShare(id: string): Promise<ShareReceipt> {
+    const { root, workspaceId } = this.keys();
+    const payload = this.db.selectValue('SELECT payload FROM workspace_shares WHERE id=?', [id]);
+    if (!(payload instanceof Uint8Array)) throw new Error('Workspace invitation no longer exists.');
+    return shareReceiptSchema.parse(JSON.parse(decoder.decode(await openObject(root, workspaceId, id, new Uint8Array(payload), 'record'))));
+  }
+  private shareIds(): string[] {
+    return this.db.selectValues('SELECT id FROM workspace_shares ORDER BY rowid DESC').map(id => z.uuid().parse(id));
+  }
+  private async sealShare(receipt: ShareReceipt, root = this.keys().root) {
+    const bytes = encoder.encode(JSON.stringify(shareReceiptSchema.parse(receipt)));
+    if (bytes.length > MAX_OBJECT_BYTES) throw new Error('Workspace share annotation history exceeds 8 MiB. Share a smaller dataset.');
+    return sealObject(root, this.keys().workspaceId, receipt.invitation.id, bytes, 'record');
+  }
+  private async saveShare(receipt: ShareReceipt) {
+    const payload = await this.sealShare(receipt);
+    this.db.exec({ sql: 'INSERT OR REPLACE INTO workspace_shares(id,payload) VALUES(?,?)', bind: [receipt.invitation.id, payload] });
+  }
+  private async buildShareProposal(id: string, author: string, message: string) {
+    const receipt = await this.readShare(id);
+    if (receipt.role !== 'contributor' || receipt.status !== 'open') throw new Error('Workspace invitation already has a submitted proposal.');
+    if (Date.parse(receipt.invitation.expires) <= Date.now()) throw new Error('Workspace invitation expired. Your local edits are safe; ask the owner for a new invitation.');
+    const changes: ShareProposal['changes'] = [];
+    for (const base of receipt.bases) {
+      const local = (await this.readWorkspaceImage(base.image.id)).document;
+      const next = documentSchema.parse({ ...local, image: base.image });
+      const masks = next.annotations.filter(item => item.kind === 'mask');
+      if (masks.length) {
+        const tiles = await this.readMaskTiles(base.image.id);
+        for (const mask of masks) {
+          if (receipt.maskDigests?.[`${base.image.id}/${mask.id}`] === await maskDigest(mask, tiles)) {
+            const original = base.annotations.find(item => item.id === mask.id);
+            if (original) next.annotations[next.annotations.findIndex(item => item.id === mask.id)] = original;
+          }
+        }
+      }
+      mergeProposal(base, next, base);
+      if (!same(base.annotations, next.annotations) || base.review !== next.review) changes.push({ base, next });
+    }
+    if (!changes.length) throw new Error('Workspace has no annotation changes to submit.');
+    const proposal = proposalSchema.parse({ version: 1, shareId: id, author, message, changes });
+    return { media: await encryptProposal(receipt.invitation, proposal), count: changes.length };
+  }
+  private async mergeShareProposal(receipt: ShareReceipt, proposal: ShareProposal) {
+    if (receipt.role !== 'owner' || receipt.status !== 'open') throw new Error('Workspace proposal has already been reviewed.');
+    const bases = new Map(receipt.bases.map(base => [base.image.id, base]));
+    const seen = new Set<string>();
+    const documents: AnnotationDocument[] = [], conflicts: string[] = [];
+    for (const change of proposal.changes) {
+      const id = change.base.image.id;
+      if (seen.has(id) || !same(bases.get(id), change.base)) throw new Error('Workspace proposal does not match the original shared snapshot.');
+      seen.add(id);
+      try {
+        const latest = (await this.readWorkspaceRecord(id)).document;
+        documents.push(mergeProposal(change.base, change.next, await this.effectiveDocument(latest)));
+      } catch (failure) {
+        conflicts.push(`${change.base.image.name}: ${failure instanceof Error ? failure.message : 'Unable to merge this image.'}`);
+      }
+    }
+    return { documents, conflicts };
+  }
+  private async previewShareProposal(id: string, bytes: ArrayBuffer): Promise<ProposalPreview> {
+    this.shareReview = undefined;
+    const receipt = await this.readShare(id), proposal = await decryptProposal(receipt.invitation, bytes);
+    const { conflicts } = await this.mergeShareProposal(receipt, proposal);
+    const preview: ProposalPreview = {
+      token: crypto.randomUUID(), shareId: id, author: proposal.author, message: proposal.message, conflicts,
+      images: proposal.changes.map(({ base, next }) => ({
+        id: base.image.id, name: base.image.name,
+        added: next.annotations.filter(item => !base.annotations.some(old => old.id === item.id)).length,
+        changed: next.annotations.filter(item => base.annotations.some(old => old.id === item.id && !same(old, item))).length,
+        removed: base.annotations.filter(item => !next.annotations.some(changed => changed.id === item.id)).length,
+        reviewChanged: base.review !== next.review,
+        reviewBefore: base.review, reviewAfter: next.review,
+        edits: [...new Set([...base.annotations.map(item => item.id), ...next.annotations.map(item => item.id)])]
+          .filter(id => !same(base.annotations.find(item => item.id === id), next.annotations.find(item => item.id === id)))
+          .map(id => ({ id, before: base.annotations.find(item => item.id === id) ?? null, after: next.annotations.find(item => item.id === id) ?? null })),
+      })),
+    };
+    this.shareReview = { preview, proposal };
+    return preview;
+  }
+  private async decideShareProposal(token: string, approve: boolean) {
+    const review = this.shareReview;
+    if (!review || review.preview.token !== token) throw new Error('Workspace proposal preview is stale. Check the proposal again.');
+    const receipt = await this.readShare(review.preview.shareId);
+    if (receipt.role !== 'owner' || receipt.status !== 'open') throw new Error('Workspace proposal has already been reviewed.');
+    const rows: { id: string; payload: Uint8Array<ArrayBuffer> }[] = [];
+    if (approve) {
+      const { documents, conflicts } = await this.mergeShareProposal(receipt, review.proposal);
+      if (conflicts.length) throw new Error(`Workspace proposal conflicts with current edits. No changes were approved. ${conflicts.join(' ')}`);
+      const { root, workspaceId } = this.keys();
+      for (const document of documents) {
+        const previous = await this.readWorkspaceRecord(document.image.id);
+        const bytes = encoder.encode(JSON.stringify({ ...previous, document }));
+        if (bytes.length > MAX_OBJECT_BYTES) throw new Error('Annotation document exceeds 8 MiB.');
+        rows.push({ id: document.image.id, payload: await sealObject(root, workspaceId, document.image.id, bytes, 'record') });
+      }
+    }
+    receipt.status = approve ? 'approved' : 'rejected';
+    const encryptedReceipt = await this.sealShare(receipt);
+    this.db.transaction(() => {
+      for (const row of rows) this.db.exec({ sql: 'UPDATE workspace_records SET payload=? WHERE id=?', bind: [row.payload, row.id] });
+      this.db.exec({ sql: 'UPDATE workspace_shares SET payload=? WHERE id=?', bind: [encryptedReceipt, receipt.invitation.id] });
+    });
+    this.shareReview = undefined;
+    return { complete: true, count: rows.length };
+  }
   private getArchive(session: string) {
     if (!this.archive || this.archive.session !== session) throw new Error('Workspace backup or restore session is no longer active.');
     return this.archive;
@@ -614,8 +786,15 @@ export class VaultStore {
       await archive.writer.append({
         document: image.document, sourcePath: image.sourcePath, split: image.split,
       }, new Uint8Array(image.media), await this.readMaskTiles(image.document.image.id));
+      archive.share?.bases.push(image.document);
     } else if (archive.reader) {
       const { record, media, tiles } = await archive.reader.read(index);
+      archive.share?.bases.push(record.document);
+      if (archive.share?.receipt) {
+        for (const annotation of record.document.annotations) if (annotation.kind === 'mask') {
+          archive.share.receipt.maskDigests![`${record.document.image.id}/${annotation.id}`] = await maskDigest(annotation, tiles);
+        }
+      }
       archive.schema = mergeDatasetSchema(archive.schema ?? emptyDatasetSchema(), record.document);
       const { root, workspaceId } = this.keys();
       const document = restoredDocument(record.document, workspaceId);
@@ -645,11 +824,26 @@ export class VaultStore {
     const archive = this.getArchive(session);
     if (archive.index !== archive.count) throw new Error('Workspace archive is incomplete; no restore was committed.');
     if (archive.rotation) return this.finishRotation();
-    if (archive.writer) await archive.writer.finish();
+    if (archive.writer) {
+      await archive.writer.finish();
+      if (archive.share?.directory) {
+        const share = archive.share;
+        if (encoder.encode(JSON.stringify(share.bases)).length > MAX_OBJECT_BYTES - 32_768) {
+          throw new Error('Workspace share annotation history exceeds 8 MiB. Share a smaller dataset.');
+        }
+        this.shareExport = { id: share.id, key: share.key, bases: share.bases };
+        const media = share.directory!.pack();
+        this.archive = undefined;
+        return { count: archive.count, complete: true, media };
+      }
+    }
     if (archive.reader || archive.importing) {
       const merged = archive.schema ?? emptyDatasetSchema();
       const schema = { ...merged, revision: merged.revision + 1 };
       const encryptedSchema = await this.sealDatasetSchema(schema);
+      const receipt = archive.share?.receipt;
+      if (receipt) receipt.bases = archive.share!.bases;
+      const encryptedReceipt = receipt ? await this.sealShare(receipt) : undefined;
       if ((!archive.importing && this.db.selectValue('SELECT count(*) FROM workspace_records') !== 0) ||
           this.db.selectValue('SELECT count(*) FROM restore_staging') !== archive.count) {
         throw new Error('Workspace changed during restore. No staged images were committed.');
@@ -664,6 +858,9 @@ export class VaultStore {
         this.db.exec('DELETE FROM intents WHERE id IN (SELECT id FROM mask_objects WHERE staged=1)');
         this.db.exec('UPDATE mask_objects SET staged=0 WHERE staged=1');
         this.db.exec({ sql: 'INSERT OR REPLACE INTO dataset_schema(id,payload) VALUES(1,?)', bind: [encryptedSchema] });
+        if (receipt && encryptedReceipt) {
+          this.db.exec({ sql: 'INSERT INTO workspace_shares(id,payload) VALUES(?,?)', bind: [receipt.invitation.id, encryptedReceipt] });
+        }
       });
       this.datasetSchema = schema;
     }
@@ -694,6 +891,10 @@ export class VaultStore {
         this.db.exec({ sql: 'INSERT INTO restore_staging(id,payload,media_id) VALUES(?,?,?)', bind: [id, payload, mediaId] });
         for (const tileId of rebound.values()) this.db.exec({ sql: 'INSERT INTO mask_objects(id,image_id,staged) VALUES(?,?,1)', bind: [tileId, id] });
       });
+    } else if (index >= archive.ids.length + rotation.proofIds.length) {
+      const id = rotation.shareIds[index - archive.ids.length - rotation.proofIds.length]!;
+      const payload = await this.sealShare(await this.readShare(id), rotation.root);
+      this.db.exec({ sql: 'INSERT INTO rotation_shares(id,payload) VALUES(?,?)', bind: [id, payload] });
     } else {
       const id = rotation.proofIds[index - archive.ids.length]!;
       const row = this.db.selectObjects('SELECT payload,media_id FROM records WHERE id=?', [id])[0];
@@ -714,7 +915,8 @@ export class VaultStore {
   private async finishRotation() {
     const archive = this.archive!, rotation = archive.rotation!, { workspaceId } = this.keys();
     if (this.db.selectValue('SELECT count(*) FROM restore_staging') !== archive.ids.length ||
-        this.db.selectValue('SELECT count(*) FROM rotation_proof') !== rotation.proofIds.length) {
+        this.db.selectValue('SELECT count(*) FROM rotation_proof') !== rotation.proofIds.length ||
+        this.db.selectValue('SELECT count(*) FROM rotation_shares') !== rotation.shareIds.length) {
       throw new Error('Workspace key rotation is incomplete. No key was changed.');
     }
     const schema = datasetSchemaSchema.parse({ ...archive.schema!, revision: archive.schema!.revision + 1 });
@@ -734,7 +936,8 @@ export class VaultStore {
         DELETE FROM intents WHERE id IN (SELECT media_id FROM rotation_proof WHERE media_id IS NOT NULL);
         DELETE FROM intents WHERE id IN (SELECT id FROM mask_objects WHERE staged=1);
         UPDATE mask_objects SET staged=0 WHERE staged=1;
-        DELETE FROM restore_staging; DELETE FROM rotation_proof; DELETE FROM vault_recovery;`);
+        UPDATE workspace_shares SET payload=(SELECT payload FROM rotation_shares WHERE rotation_shares.id=workspace_shares.id);
+        DELETE FROM restore_staging; DELETE FROM rotation_proof; DELETE FROM rotation_shares; DELETE FROM vault_recovery;`);
       this.db.exec({ sql: 'UPDATE vault SET header=? WHERE id=1', bind: [JSON.stringify(rotation.header)] });
       this.db.exec({ sql: 'UPDATE dataset_schema SET payload=? WHERE id=1', bind: [encrypted] });
     });

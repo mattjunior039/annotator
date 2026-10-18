@@ -6,8 +6,9 @@ import type { WorkspaceDescriptor } from '../workers/protocol';
 import { Workspace } from './Workspace';
 import { FoundationLab } from './FoundationLab';
 import { detectCapabilities } from './capabilities';
+import { ShareImport } from './ShareImport';
 
-export function App() {
+export function App({ initialShare = '' }: { initialShare?: string }) {
   const [workspaces, setWorkspaces] = useState<WorkspaceDescriptor[]>([]);
   const [active, setActive] = useState<WorkspaceDescriptor | null>(null);
   const [creating, setCreating] = useState(false);
@@ -18,7 +19,10 @@ export function App() {
   const [passphrase, setPassphrase] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [initialPassphrase, setInitialPassphrase] = useState('');
-  const [busy, setBusy] = useState(true);
+  const [catalogBusy, setBusy] = useState(true);
+  const [importing, setImporting] = useState(false);
+  const [shareLink, setShareLink] = useState(initialShare);
+  const busy = catalogBusy || importing;
   const [error, setError] = useState('');
   const [labOpen, setLabOpen] = useState(false);
   const [capabilities] = useState(detectCapabilities);
@@ -44,11 +48,11 @@ export function App() {
     if (!active && !labOpen) void refresh();
   }, [active, labOpen]);
   useEffect(() => {
-    if (!canStore || active || labOpen || creating || deleting) return;
+    if (!canStore || active || labOpen || creating || deleting || importing) return;
     const refreshOnFocus = () => { void refresh(); };
     window.addEventListener('focus', refreshOnFocus);
     return () => window.removeEventListener('focus', refreshOnFocus);
-  }, [active, labOpen, creating, deleting]);
+  }, [active, labOpen, creating, deleting, importing]);
 
   function resetForm() {
     setName(''); setProtectedWorkspace(false); setPassphrase(''); setConfirmation(''); setError('');
@@ -81,6 +85,8 @@ export function App() {
           <button type="button" className="tool-button primary-action" disabled={busy || labOpen || !canStore}
             onClick={() => { resetForm(); setDeleting(null); setCreating(true); }}>New workspace</button>
         </div>
+        {canStore && !creating && !deleting && !labOpen && <ShareImport initialLink={shareLink} onBusyChange={setImporting}
+          onImported={(descriptor, secret) => { setShareLink(''); setInitialPassphrase(secret); setActive(descriptor); }} />}
         {!canStore && <p className="error" role="alert">Local workspaces require desktop Chromium with OPFS, Web Crypto, and Web Locks enabled.</p>}
         {creating && <form className="workspace-create workspace-card" onSubmit={event => void create(event)}>
           <h2>Create workspace</h2>
@@ -128,7 +134,7 @@ export function App() {
         {error && <div className="error" role="alert">{error}
           <button type="button" className="text-button" disabled={busy || labOpen} onClick={() => void refresh()}>Retry</button>
         </div>}
-        {busy && <p role="status">Opening local storage...</p>}
+        {catalogBusy && <p role="status">Opening local storage...</p>}
         {!creating && !busy && !error && workspaces.length === 0 && <div className="workspace-empty">
           <h2>A workspace for each dataset</h2>
           <p>Create a workspace, then add a folder or images. Your originals stay unchanged.</p>

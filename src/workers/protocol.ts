@@ -3,6 +3,7 @@ import { MAX_OBJECT_BYTES, recoverySecretSchema } from '../crypto/vault';
 import { documentSchema } from '../domain/model';
 import { classRemapsSchema, datasetSchemaSchema } from '../domain/dataset-schema';
 import { maskTileSchema } from '../domain/masks';
+import { invitationSchema, SHARE_BYTES } from '../sharing/model';
 
 const bufferSchema = z.instanceof(ArrayBuffer).refine(b => b.byteLength <= MAX_OBJECT_BYTES, 'Proof object exceeds 8 MiB.');
 const workspaceBufferSchema = z.instanceof(ArrayBuffer).refine(b => b.byteLength <= MAX_OBJECT_BYTES, 'Image exceeds the current 8 MiB workspace limit.');
@@ -58,6 +59,18 @@ export const storageRequestSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('workspace-update'), id: z.uuid(), expectedRevision: z.number().int().nonnegative(), document: documentSchema,
     tiles: z.array(maskTileSchema).max(64).optional() }),
   z.strictObject({ type: z.literal('workspace-delete'), id: z.uuid() }),
+  z.strictObject({ type: z.literal('share-export-start') }),
+  z.strictObject({ type: z.literal('share-publish'), invitation: invitationSchema,
+    reviewUrl: z.url().max(8192), name: z.string().trim().min(1).max(100) }),
+  z.strictObject({ type: z.literal('share-import-start'), invitation: invitationSchema,
+    media: z.instanceof(ArrayBuffer).refine(bytes => bytes.byteLength <= SHARE_BYTES), name: z.string().trim().min(1).max(100) }),
+  z.strictObject({ type: z.literal('share-list') }),
+  z.strictObject({ type: z.literal('share-proposal'), id: z.uuid(),
+    author: z.string().trim().min(1).max(100), message: z.string().trim().min(1).max(2000) }),
+  z.strictObject({ type: z.literal('share-submitted'), id: z.uuid() }),
+  z.strictObject({ type: z.literal('share-review'), id: z.uuid(),
+    media: z.instanceof(ArrayBuffer).refine(bytes => bytes.byteLength <= MAX_OBJECT_BYTES + 16_384, 'Workspace encrypted proposal exceeds its limit.') }),
+  z.strictObject({ type: z.literal('share-decide'), token: z.uuid(), approve: z.boolean() }),
   z.strictObject({ type: z.literal('backup-start'), directory: directorySchema, passphrase: z.string().min(12).max(1024) }),
   z.strictObject({ type: z.literal('restore-start'), directory: directorySchema, passphrase: z.string().min(12).max(1024) }),
   z.strictObject({ type: z.literal('annotation-import-start'), count: z.number().int().min(1).max(10_000) }),

@@ -92,6 +92,7 @@ export class BackupWriter {
   private readonly entries: ManifestEntry[] = [];
   private readonly ids = new Set<string>();
   private completed = false;
+  get id(): string { return this.key.workspaceId; }
   private constructor(
     private readonly directory: ArchiveDirectory,
     private readonly root: CryptoKey,
@@ -159,6 +160,7 @@ export class BackupReader {
     private readonly manifest: z.infer<typeof manifestSchema>,
   ) {}
   get count(): number { return this.manifest.entries.length; }
+  get id(): string { return this.manifest.backupId; }
   get schema(): DatasetSchema | undefined { return this.manifest.datasetSchema; }
   static async open(directory: ArchiveDirectory, passphrase: string): Promise<BackupReader> {
     const bootstrap = bootstrapSchema.parse(JSON.parse(decoder.decode(await readFile(directory, 'backup.json', 4096))));

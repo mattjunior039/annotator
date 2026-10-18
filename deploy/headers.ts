@@ -1,3 +1,9 @@
+const s3Origins = (process.env.VITE_S3_ORIGINS ?? '').split(',').map(value => value.trim()).filter(Boolean);
+for (const origin of s3Origins) {
+  const url = new URL(origin);
+  if (url.protocol !== 'https:' || url.origin !== origin) throw new Error('VITE_S3_ORIGINS must contain exact HTTPS origins, separated by commas.');
+}
+
 export const productionHeaders = {
   'Content-Security-Policy': [
     "default-src 'none'",
@@ -5,7 +11,7 @@ export const productionHeaders = {
     "style-src 'self'",
     "img-src 'self' blob:",
     "font-src 'self'",
-    "connect-src 'self'",
+    `connect-src 'self'${s3Origins.length ? ` ${s3Origins.join(' ')}` : ''}`,
     "worker-src 'self'",
     "manifest-src 'self'",
     "base-uri 'none'",

@@ -27,6 +27,7 @@ import type { LiveGuest } from '../collaboration/guest';
 import type { ConnectionMode } from '../collaboration/link';
 import type { Participant } from '../collaboration/protocol';
 import { LiveSharePanel, ParticipantList } from './LiveSharePanel';
+import { SharePanel } from './SharePanel';
 import {
   mediaResultSchema, statusSchema, workspaceDeleteSchema, workspaceImportSchema,
   workspaceExportInfoSchema, workspaceListSchema, workspaceReadSchema, workspaceWriteSchema,
@@ -236,6 +237,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
   const [replaceAnnotations, setReplaceAnnotations] = useState(false);
   const [resumeIntake, setResumeIntake] = useState(false);
   const [sharingOpen, setSharingOpen] = useState(false);
+  const [persistentSharingOpen, setPersistentSharingOpen] = useState(false);
   const exportDialog = useRef<HTMLDialogElement>(null);
   const [archiveMode, setArchiveMode] = useState<'backup' | 'restore' | null>(null);
   const [archivePassphrase, setArchivePassphrase] = useState('');
@@ -1582,7 +1584,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
     setArchivePassphrase(''); setArchiveConfirmation(''); setVaultSecrets({ current: '', next: '', confirmation: '' });
     setRecoveryCurrent(''); setRecoveryText(''); setRecoveryNext(''); setRecoveryConfirmation(''); setRecoveryUrl('');
     setRotationSecrets({ current: '', next: '', confirmation: '' });
-    setExportOpen(false); setArchiveMode(null); setSharingOpen(false);
+    setExportOpen(false); setArchiveMode(null); setSharingOpen(false); setPersistentSharingOpen(false);
     setVault(previous => previous ? { ...previous, unlocked: false } : null);
     setError('');
     setNotice(automatic ? 'Workspace locked after inactivity. Completed edits are saved; unfinished gestures were discarded.' :
@@ -1641,6 +1643,9 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
           onClick={showExport}><span className="step-number" aria-hidden="true">3</span>Export</button>}
       </div>
       <div className="project-nav-utilities">
+        {!guest && <button type="button" disabled={busy || !!liveHost.current} aria-expanded={persistentSharingOpen}
+          title={liveHost.current ? 'Stop live sharing before publishing or reviewing snapshots.' : 'Encrypted snapshots and approval-based contributions'}
+          onClick={() => setPersistentSharingOpen(previous => !previous)}>Share workspace</button>}
         {liveHost.current && liveHost.current.pending.length > 0 && <button type="button" className="live-alert"
           onClick={() => setSharingOpen(true)}>{liveHost.current.pending.length} waiting to join</button>}
         {guest ? <span className="live-badge" role="status">Live · {participants.length} {participants.length === 1 ? 'person' : 'people'}</span>
@@ -1731,6 +1736,12 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
       })}>{busy ? 'Preparing...' : 'Resume schema preparation'}</button>
     </div>}
     {vault?.unlocked && datasetSchema && <>
+      {persistentSharingOpen && !guest && !liveHost.current && storage.current && <SharePanel storage={storage.current}
+        workspaceName={descriptor.name} busy={busy} run={perform} onClose={() => setPersistentSharingOpen(false)}
+        onUpdated={async () => {
+          await refreshIndex(0);
+          if (currentRef.current) await openImage(currentRef.current.document.image.id);
+        }} />}
       {sharingOpen && !guest && <LiveSharePanel host={liveHost.current} mode={liveMode} onMode={setLiveMode}
         onStart={() => void perform(startLiveSession)} onStop={() => { stopLiveSession(); setLiveRevision(value => value + 1); }}
         ended={liveEnded} busy={busy} images={imageIndex} onClose={() => setSharingOpen(false)} />}

@@ -2,6 +2,8 @@
 
 ## Automated coverage
 
+- Persistent-sharing tests (`src/sharing/sharing.test.ts`, `src/storage/sharing.test.ts`, `npm run test:sharing`) cover encrypted snapshot/schema/media round trips; wrong keys, tampering and container bounds; signed 24-hour fixed-object GET/create-only PUT capabilities; origin/expiry guards and bounded downloads; atomic multi-image approval rollback, stale/conflicting review, forged bases, duplicate images and replay; separate-browser encrypted local-copy persistence while the owner is offline, explicit proposal submission, disjoint owner-edit merge, approval/rejection persistence, receipts and unchanged masks surviving key rotation, and conflicting review-state edits. Browser S3 requests use a signature-verifying in-process object-store double; these tests do not certify production AWS/R2/CORS/provider behavior.
+
 - Live share unit tests (`src/collaboration/collaboration.test.ts`, `services/signaling/room.test.ts`) cover:
   - invite round-trip, matching verification codes on both sides, and different codes under key substitution
   - replay, tamper, and out-of-order frame rejection

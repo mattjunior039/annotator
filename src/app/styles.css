@@ -417,3 +417,10 @@ button { font: inherit; }
 .live-guest-bar .live-participants { margin: 0; display: flex; gap: 14px; flex-wrap: wrap; }
 .live-viewers { display: flex; gap: 3px; }
 .live-join .workspace-card { max-width: 520px; }
+.share-form { display: grid; gap: 12px; margin-block: 16px; max-width: 720px; }
+.share-form label, .share-invitations label { display: grid; gap: 6px; }
+.share-form textarea { min-height: 80px; resize: vertical; font: inherit; }
+.share-form input, .share-form textarea, .share-invitations input { box-sizing: border-box; width: 100%; min-width: 0; }
+.share-invitations { list-style: none; padding: 0; }
+.share-invitations > li, .share-review { border-top: 1px solid var(--border, #d5dcd4); padding-block: 16px; }
+.share-review pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow: auto; }

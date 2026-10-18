@@ -1,5 +1,7 @@
 # Live share and collaboration
 
+For owner-offline access with local working copies and approval-based submissions, use **Share workspace** instead. See [persistent-sharing.md](persistent-sharing.md); this is separate from the real-time session described below.
+
 Live share lets a workspace owner (the **host**) invite up to seven guests to annotate the same images in real time, similar to VS Code Live Share. The host's encrypted vault is the only copy of the dataset. Guests see it through an end-to-end encrypted session and never store it.
 
 ## User flow

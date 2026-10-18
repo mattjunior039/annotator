@@ -36,6 +36,7 @@ jobs:
         run: npm run build
         env:
           VITE_BASE_PATH: ${{ steps.pages.outputs.base_path }}/
+          VITE_S3_ORIGINS: ${{ vars.VITE_S3_ORIGINS }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

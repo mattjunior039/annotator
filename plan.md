@@ -364,6 +364,8 @@ Open:
 
 ## 12. Encrypted asynchronous BYOS sync
 
+**Scoped sharing implementation (2026-10-17):** Following the selected product direction, **Share workspace** now publishes encrypted snapshots with 24-hour S3 pre-signed download/proposal-upload capabilities. Recipients edit password-protected local copies offline and submit one annotation proposal per invitation. Owners explicitly review before/proposed annotations and approve or reject; worker-side three-way merge preserves disjoint edits, refuses conflicts and commits all records plus the decision atomically. Encrypted local receipts survive reload and key rotation. This is a bounded 64 MiB snapshot / 8 MiB proposal implementation using the existing backup codec, not the continuous Yjs/content-addressed BYOS sync designed below. Media/schema/mask proposals, automatic replica reconciliation, URL renewal and contributor decision notifications remain outside this mode. Deployment needs an exact S3-origin allowlist, scoped credentials and CORS. See [docs/persistent-sharing.md](docs/persistent-sharing.md).
+
 ### Provider order
 
 1. S3-compatible adapter: AWS S3, Cloudflare R2, and MinIO.
