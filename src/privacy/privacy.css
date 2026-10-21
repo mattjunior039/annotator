@@ -1,0 +1,36 @@
+.privacy-explorer {
+  color: #17212b;
+  background: #fff;
+  border: 1px solid #64748b;
+  border-radius: .5rem;
+  padding: 1rem;
+  max-width: 72rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+.privacy-explorer fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .75rem;
+  margin-block: 1rem;
+}
+.privacy-explorer label { display: block; }
+.privacy-explorer fieldset label { display: inline-flex; align-items: center; gap: .4rem; }
+.privacy-explorer select { max-width: 100%; min-height: 2.75rem; font: inherit; }
+.privacy-explorer button { min-height: 2.75rem; padding: .5rem .75rem; font: inherit; }
+.privacy-explorer a { color: #124e89; text-decoration: underline; }
+.privacy-explorer :focus-visible { outline: 3px solid #124e89; outline-offset: 3px; }
+.privacy-explorer summary { cursor: pointer; padding-block: .75rem; }
+.privacy-step { border-inline-start: .25rem solid #64748b; padding-inline-start: 1rem; }
+.privacy-controls { display: flex; flex-wrap: wrap; gap: .5rem; }
+.privacy-table-scroll { max-width: 100%; overflow-x: auto; }
+.privacy-explorer table { border-collapse: collapse; width: 100%; }
+.privacy-explorer th, .privacy-explorer td {
+  text-align: start;
+  vertical-align: top;
+  padding: .5rem;
+  border: 1px solid #64748b;
+  min-width: 10rem;
+}
+.privacy-explorer caption { text-align: start; padding-block: .5rem; font-weight: bold; }

@@ -1,6 +1,21 @@
 # Encrypted snapshots and approval-based contributions
 
-**Share workspace** is separate from **Live share**. It uses a user-supplied S3-compatible bucket, not an account database, and works when the owner is offline:
+**Share workspace** is separate from **Live share**. Recipients keep independent local copies and can work while the owner is offline. Choose encrypted file exchange (no storage account) or a user-supplied S3-compatible bucket.
+
+## Send images or a folder to a friend without an account
+
+1. Create a workspace and use **Add images** or **Add folder**. Import makes sanitized, app-managed copies; your original files remain unchanged.
+2. Open **Share workspace → Send an encrypted file (no storage account needed)**, enter an invitation label and choose **Create encrypted share file**.
+3. Download the `.annotator-share` file and send it using your preferred file-transfer service. Send the displayed **File decryption secret** separately, through a trusted channel. The secret is not embedded in the file.
+4. Your friend opens the app dashboard, expands **Open a workspace invitation**, selects **Encrypted share file**, chooses the file and enters its secret. They choose a local name and a new working-copy passphrase, then click **Import file & create local copy**.
+5. They annotate their local copy, open **Share workspace**, enter an author and summary, choose **Create encrypted proposal file**, download the `.annotator-proposal` file and return it to you.
+6. Reopen your original workspace and select that file under **Returned proposal file** for its invitation. Inspect the review and explicitly approve or reject it. Independent edits merge; conflicts block approval without partially changing the workspace.
+
+Create one invitation per friend and a fresh invitation for each subsequent round. Only one proposal can be approved per invitation. Generating a file is not proof it was delivered; neither download nor file transfer automatically synchronizes either workspace.
+
+File invitations have **no expiry or remote revocation**. Anyone holding the snapshot and its secret can retain access permanently. A file-transfer provider can observe filenames, sizes, timing and ciphertext; do not put the secret beside the file. The app itself performs no network transfer for this workflow. Snapshots are capped at 64 MiB (plus a small public file header) and assembled in memory, so this is not a large-folder transfer service. Keep backups of important work; original owner review receipts are not included in ordinary dataset backups.
+
+## S3 invitations
 
 1. The owner opens **Share workspace → New 24-hour invitation**, enters an invitation label and scoped S3 credentials, then explicitly chooses **Encrypt, upload & create invitation**.
 2. The storage worker creates an independently encrypted snapshot using the existing authenticated, chunked backup format. Only ciphertext reaches the network client. Original local files and the owner's workspace are unchanged.
@@ -24,7 +39,7 @@ Create one invitation per contributor. Both PUT capabilities sign `If-None-Match
 
 ## S3 deployment
 
-Only exact, explicitly configured HTTPS origins are allowed. The default build permits same-origin requests only. For example:
+Only exact, explicitly configured HTTPS storage origins are allowed. The default build enables no external S3 origin (the separate BYOK AI and loopback policies do not enable storage access). For example:
 
 ```sh
 VITE_S3_ORIGINS=https://s3.us-east-1.amazonaws.com npm run build

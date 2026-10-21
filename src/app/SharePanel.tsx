@@ -6,6 +6,7 @@ import { proposalPreviewSchema, shareSummariesSchema } from '../sharing/model';
 import type { ProposalPreview, ShareSummary } from '../sharing/model';
 import { createS3Capabilities, downloadEncrypted, shareLink, uploadEncrypted } from '../sharing/s3';
 import type { S3Settings } from '../sharing/s3';
+import { fileInvitation, packShareFile, PROPOSAL_FILE_BYTES, readSharedFile } from '../sharing/files';
 
 const exportStartSchema = archiveProgressSchema.extend({ id: z.uuid(), key: z.string() });
 const exportFinishedSchema = archiveFinishedSchema.extend({ media: z.instanceof(ArrayBuffer) });
@@ -25,16 +26,44 @@ export function SharePanel({ storage, workspaceName, busy, run, onUpdated, onClo
   const [author, setAuthor] = useState('');
   const [message, setMessage] = useState('');
   const [preview, setPreview] = useState<ProposalPreview | null>(null);
+  const [download, setDownload] = useState<{ url: string; name: string } | null>(null);
+  useEffect(() => () => { if (download) URL.revokeObjectURL(download.url); }, [download]);
+  function prepareDownload(media: ArrayBuffer, name: string) {
+    setDownload({ url: URL.createObjectURL(new Blob([media], { type: 'application/octet-stream' })), name });
+  }
   async function refresh() { setShares(await storage.request({ type: 'share-list' }, shareSummariesSchema)); }
   useEffect(() => {
     const timer = setTimeout(() => { void run(refresh); }, 0);
     return () => clearTimeout(timer);
   }, [storage]);
 
+  async function exportFile() {
+    setNotice(''); setDownload(null);
+    let session: string | undefined;
+    try {
+      const start = await storage.request({ type: 'share-export-start' }, exportStartSchema);
+      session = start.session;
+      for (let index = 0; index < start.count; index++) {
+        setProgress(`Encrypting image ${index + 1} of ${start.count}`);
+        await storage.request({ type: 'archive-step', session, index }, archiveProgressSchema);
+      }
+      const snapshot = await storage.request({ type: 'archive-finish', session }, exportFinishedSchema);
+      session = undefined;
+      const invitation = fileInvitation(start.id, start.key);
+      await storage.request({ type: 'share-publish', invitation, reviewUrl: invitation.download, name: recipient }, archiveFinishedSchema);
+      prepareDownload(packShareFile(start.id, snapshot.media), `workspace-${start.id}.annotator-share`);
+      await refresh();
+      setNotice('Encrypted share file ready. Download it below, send it to your friend, and send the secret separately. No upload was made by this app.');
+    } finally {
+      if (session && !storage.isClosed) await storage.request({ type: 'archive-cancel', session }, archiveFinishedSchema);
+      setProgress('');
+    }
+  }
+
   async function publish() {
     const credentials = settings;
     setSettings(previous => ({ ...previous, accessKeyId: '', secretAccessKey: '', sessionToken: '' }));
-    setNotice(''); setProgress('Preparing encrypted snapshot...');
+    setNotice(''); setDownload(null); setProgress('Preparing encrypted snapshot...');
     let session: string | undefined;
     try {
       const start = await storage.request({ type: 'share-export-start' }, exportStartSchema);
@@ -60,8 +89,13 @@ export function SharePanel({ storage, workspaceName, busy, run, onUpdated, onClo
     }
   }
   async function submit(share: ShareSummary) {
-    setNotice('');
+    setNotice(''); setDownload(null);
     const proposal = await storage.request({ type: 'share-proposal', id: share.invitation.id, author, message }, proposalOutputSchema);
+    if (share.invitation.transport === 'file') {
+      prepareDownload(proposal.media, `proposal-${share.invitation.id}.annotator-proposal`);
+      setNotice(`Encrypted proposal for ${proposal.count} images is ready. Download it below and send it to the owner. Nothing was uploaded or approved automatically.`);
+      return;
+    }
     await uploadEncrypted(share.invitation.upload, proposal.media);
     await storage.request({ type: 'share-submitted', id: share.invitation.id }, archiveFinishedSchema);
     await refresh();
@@ -71,6 +105,11 @@ export function SharePanel({ storage, workspaceName, busy, run, onUpdated, onClo
     setPreview(null); setNotice('');
     const media = await downloadEncrypted(share.reviewUrl, 8 * 1024 * 1024 + 16_384);
     if (!media) { setNotice('No proposal has been submitted for this invitation yet.'); return; }
+    setPreview(await storage.request({ type: 'share-review', id: share.invitation.id, media }, proposalPreviewSchema, [media]));
+  }
+  async function reviewFile(share: ShareSummary, file: File) {
+    setPreview(null); setNotice('');
+    const media = await readSharedFile(file, PROPOSAL_FILE_BYTES);
     setPreview(await storage.request({ type: 'share-review', id: share.invitation.id, media }, proposalPreviewSchema, [media]));
   }
   async function decide(approve: boolean) {
@@ -84,8 +123,18 @@ export function SharePanel({ storage, workspaceName, busy, run, onUpdated, onClo
   return <section className="workspace-card persistent-share" aria-label="Workspace sharing">
     <div className="dashboard-heading"><h2>Share workspace</h2>
       <button type="button" className="text-button" disabled={busy} onClick={onClose}>Close sharing</button></div>
-    <p>Share an encrypted snapshot of <strong>{workspaceName}</strong>. Recipients edit a local copy, even while you are offline, then submit annotations for your approval.</p>
-    <p>Each invitation permits one proposal within 24 hours. Images, masks and class/schema changes cannot be proposed. Names are self-reported, not verified identities.</p>
+    <p>Importing images makes an app-managed copy; your source files stay unchanged. Use <strong>Live share</strong> to edit together while your tab is open.</p>
+    <p>For work while you are offline, share an encrypted snapshot of <strong>{workspaceName}</strong>. Friends keep a local working copy and return annotations for your approval. This is reviewed copy exchange, not automatic cloud sync.</p>
+    <p>Each invitation permits one accepted proposal. Images, masks and class/schema changes cannot be proposed. Names are self-reported, not verified identities.</p>
+    <details>
+      <summary>Send an encrypted file (no storage account needed)</summary>
+      <form className="share-form" onSubmit={event => { event.preventDefault(); void run(exportFile); }}>
+        <p>Create a snapshot up to 64 MiB. Send the downloaded file by your own file-transfer service and the decryption secret by a separate private channel. File shares do not expire and cannot be recalled; anyone with both can decrypt the copy.</p>
+        <label>File invitation label<input required maxLength={100} disabled={busy} value={recipient}
+          placeholder="e.g. Riley's working copy" onChange={event => setRecipient(event.target.value)} /></label>
+        <button type="submit" className="continue-button" disabled={busy}>Create encrypted share file</button>
+      </form>
+    </details>
     <details>
       <summary>New 24-hour invitation</summary>
       <form className="share-form" onSubmit={event => { event.preventDefault(); void run(publish); }}>
@@ -105,25 +154,40 @@ export function SharePanel({ storage, workspaceName, busy, run, onUpdated, onClo
     </details>
     {progress && <p role="status">{progress}</p>}
     {notice && <p role="status">{notice}</p>}
+    {download && <p><a href={download.url} download={download.name}>Download encrypted file</a> · Send it yourself; this app has not transferred it.</p>}
     <ul className="share-invitations">
       {shares.map(share => <li key={share.invitation.id}>
         <h3>{share.name}</h3>
-        <p>{share.role === 'owner' ? 'Sent invitation' : 'Local working copy'} · {share.status} · expires {new Date(share.invitation.expires).toLocaleString()}</p>
+        <p>{share.role === 'owner' ? 'Sent invitation' : 'Local working copy'} · {share.status} · {share.invitation.expires
+          ? `expires ${new Date(share.invitation.expires).toLocaleString()}` : 'file exchange · no expiry'}</p>
         {share.role === 'owner' ? <>
           {share.status === 'open' && <>
-            <label>Workspace invitation<input readOnly value={shareLink(share.invitation)} onFocus={event => event.currentTarget.select()} /></label>
-            <div className="live-actions">
+            {share.invitation.transport === 'file' ? <>
+              <label>File decryption secret<input readOnly type="password" value={share.invitation.key}
+                onFocus={event => event.currentTarget.select()} /></label>
+              <p>Select and copy this secret manually. Send it separately from the encrypted file. Your friend opens both through Workspaces → Open a workspace invitation.</p>
+              <label>Returned proposal file<input type="file" accept=".annotator-proposal" disabled={busy}
+                onChange={event => {
+                  const file = event.target.files?.[0]; event.target.value = '';
+                  if (file) void run(() => reviewFile(share, file));
+                }} /></label>
+            </> : <>
+              <label>Workspace invitation<input readOnly value={shareLink(share.invitation)} onFocus={event => event.currentTarget.select()} /></label>
+              <div className="live-actions">
               <button type="button" disabled={busy} onClick={() => void run(async () => {
                 await navigator.clipboard.writeText(shareLink(share.invitation)); setNotice('Invitation copied. Share it only through a private channel.');
               })}>Copy invitation</button>
               <button type="button" disabled={busy} onClick={() => void run(() => review(share))}>Check for proposal</button>
-            </div>
+              </div>
+            </>}
           </>}
         </> : share.status === 'open' ? <form className="share-form" onSubmit={event => { event.preventDefault(); void run(() => submit(share)); }}>
           <label>Proposal author<input required maxLength={100} disabled={busy} value={author} onChange={event => setAuthor(event.target.value)} /></label>
           <label>Proposal summary<textarea required maxLength={2000} disabled={busy} value={message} onChange={event => setMessage(event.target.value)} /></label>
-          <p>Only annotation and review-state edits to the original images are submitted. Keep your local copy; the invitation's upload permission expires after 24 hours.</p>
-          <button type="submit" disabled={busy}>Submit changes for approval</button>
+          <p>Only annotation and review-state edits to the original images are submitted. Keep your local copy. {share.invitation.transport === 'file'
+            ? 'Download the encrypted proposal and send it back to the owner for approval; file exchange has no expiry.'
+            : "The invitation's upload permission expires after 24 hours."}</p>
+          <button type="submit" disabled={busy}>{share.invitation.transport === 'file' ? 'Create encrypted proposal file' : 'Submit changes for approval'}</button>
         </form> : <p>Your local edits remain saved here. A new invitation is needed for another proposal.</p>}
       </li>)}
     </ul>

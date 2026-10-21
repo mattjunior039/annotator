@@ -69,4 +69,28 @@ test('workspace dashboard and editor meet automated WCAG 2.2 AA checks', async (
   await page.keyboard.press('Tab');
   await expect(page.getByRole('button', { name: 'Box', exact: true })).toBeFocused();
   await checkAccessibility(page, 'Annotation editor');
+
+  const externalRequests: string[] = [];
+  page.on('request', request => {
+    if (request.url().includes('api.example') || request.url().includes('huggingface.co')) externalRequests.push(request.url());
+  });
+  await page.getByRole('button', { name: 'AI suggestions', exact: true }).click();
+  await page.getByRole('button', { name: 'Prepare local preview' }).click();
+  await expect(page.getByRole('img', { name: 'Exact crop prepared locally with opaque black redactions' })).toBeVisible();
+  await page.getByLabel('HTTPS endpoint').fill('https://api.example/v1/chat/completions');
+  await page.getByLabel('Model', { exact: true }).fill('test-model');
+  await page.getByLabel('API key (used in memory only)').fill('test-only-key');
+  await page.getByRole('checkbox', { name: /I consent to send this previewed PNG/ }).check();
+  await checkAccessibility(page, 'Cloud vision crop and consent dialog');
+  await page.getByRole('button', { name: 'Send crop for suggestions' }).click();
+  await expect(page.getByRole('alert')).toContainText('allowlist');
+  await page.locator('.local-model-consent input[type="checkbox"]').check();
+  await page.getByRole('button', { name: 'Download model and run locally' }).click();
+  await expect(page.getByRole('alert')).toContainText('Local model download is disabled');
+  expect(externalRequests).toEqual([]);
+  await page.getByRole('button', { name: 'Close AI suggestions' }).click();
+
+  await page.getByRole('button', { name: 'Local MCP companion' }).click();
+  await checkAccessibility(page, 'Local MCP pairing and scope dialog');
+  await page.getByRole('button', { name: 'Close companion' }).click();
 });

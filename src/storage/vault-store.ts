@@ -633,7 +633,7 @@ export class VaultStore {
   private async buildShareProposal(id: string, author: string, message: string) {
     const receipt = await this.readShare(id);
     if (receipt.role !== 'contributor' || receipt.status !== 'open') throw new Error('Workspace invitation already has a submitted proposal.');
-    if (Date.parse(receipt.invitation.expires) <= Date.now()) throw new Error('Workspace invitation expired. Your local edits are safe; ask the owner for a new invitation.');
+    if (receipt.invitation.expires && Date.parse(receipt.invitation.expires) <= Date.now()) throw new Error('Workspace invitation expired. Your local edits are safe; ask the owner for a new invitation.');
     const changes: ShareProposal['changes'] = [];
     for (const base of receipt.bases) {
       const local = (await this.readWorkspaceImage(base.image.id)).document;

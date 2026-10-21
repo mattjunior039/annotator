@@ -7,6 +7,7 @@ import { Workspace } from './Workspace';
 import { FoundationLab } from './FoundationLab';
 import { detectCapabilities } from './capabilities';
 import { ShareImport } from './ShareImport';
+import { PrivacyFlowExplorer } from '../privacy';
 
 export function App({ initialShare = '' }: { initialShare?: string }) {
   const [workspaces, setWorkspaces] = useState<WorkspaceDescriptor[]>([]);
@@ -87,6 +88,7 @@ export function App({ initialShare = '' }: { initialShare?: string }) {
         </div>
         {canStore && !creating && !deleting && !labOpen && <ShareImport initialLink={shareLink} onBusyChange={setImporting}
           onImported={(descriptor, secret) => { setShareLink(''); setInitialPassphrase(secret); setActive(descriptor); }} />}
+        {!creating && !deleting && !labOpen && <PrivacyFlowExplorer />}
         {!canStore && <p className="error" role="alert">Local workspaces require desktop Chromium with OPFS, Web Crypto, and Web Locks enabled.</p>}
         {creating && <form className="workspace-create workspace-card" onSubmit={event => void create(event)}>
           <h2>Create workspace</h2>

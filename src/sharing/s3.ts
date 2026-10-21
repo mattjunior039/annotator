@@ -27,8 +27,9 @@ export function parseShareLink(text: string): ShareInvitation {
   try { data = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(fromBase64Url(url.hash.slice(7)))); }
   catch { throw new Error('This workspace invitation is damaged.'); }
   const invitation = invitationSchema.parse(data);
+  if (invitation.transport === 'file') throw new Error('Open this invitation with its encrypted share file instead.');
   checkShareUrl(invitation.download); checkShareUrl(invitation.upload);
-  if (Date.parse(invitation.expires) <= Date.now()) throw new Error('This invitation has expired. Ask the owner for a new one.');
+  if (!invitation.expires || Date.parse(invitation.expires) <= Date.now()) throw new Error('This invitation has expired. Ask the owner for a new one.');
   return invitation;
 }
 

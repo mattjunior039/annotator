@@ -4,7 +4,15 @@ import { annotationSchema, documentSchema, reviewSchema } from '../domain/model'
 export const SHARE_BYTES = 64 * 1024 * 1024;
 export const invitationSchema = z.strictObject({
   version: z.literal(1), id: z.uuid(), key: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
-  download: z.url().max(8192), upload: z.url().max(8192), expires: z.string().datetime(),
+  transport: z.enum(['s3', 'file']).optional(),
+  download: z.url().max(8192), upload: z.url().max(8192), expires: z.string().datetime().nullable(),
+}).superRefine((invitation, context) => {
+  if (invitation.transport === 'file'
+    ? invitation.expires !== null || invitation.download !== `urn:annotator:file:${invitation.id}` ||
+      invitation.upload !== invitation.download
+    : invitation.expires === null) {
+    context.addIssue({ code: 'custom', message: 'Invalid invitation transport or expiry.' });
+  }
 });
 export type ShareInvitation = z.infer<typeof invitationSchema>;
 export const shareReceiptSchema = z.strictObject({

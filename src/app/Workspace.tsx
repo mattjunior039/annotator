@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { ImageHistory } from '../domain/history';
 import { documentSchema } from '../domain/model';
@@ -28,6 +28,7 @@ import type { ConnectionMode } from '../collaboration/link';
 import type { Participant } from '../collaboration/protocol';
 import { LiveSharePanel, ParticipantList } from './LiveSharePanel';
 import { SharePanel } from './SharePanel';
+import type { SuggestedBox } from '../ai/cloud-vision';
 import {
   mediaResultSchema, statusSchema, workspaceDeleteSchema, workspaceImportSchema,
   workspaceExportInfoSchema, workspaceListSchema, workspaceReadSchema, workspaceWriteSchema,
@@ -37,6 +38,9 @@ import {
 } from '../workers/protocol';
 import type { SchemaMigrationPreview, VaultStatus, WorkspaceDescriptor } from '../workers/protocol';
 import { recoverySecretSchema } from '../crypto/vault';
+
+const CloudVisionDialog = lazy(() => import('../ai/CloudVisionDialog').then(module => ({ default: module.CloudVisionDialog })));
+const BridgePanel = lazy(() => import('./BridgePanel').then(module => ({ default: module.BridgePanel })));
 
 export type Tool = 'box' | 'polygon' | 'line' | 'label' | 'keypoints' | 'mask' | 'erase' | 'select' | 'pan';
 interface SizedSanitizedImage { png: ArrayBuffer; width: number; height: number }
@@ -238,6 +242,8 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
   const [resumeIntake, setResumeIntake] = useState(false);
   const [sharingOpen, setSharingOpen] = useState(false);
   const [persistentSharingOpen, setPersistentSharingOpen] = useState(false);
+  const [cloudVisionOpen, setCloudVisionOpen] = useState(false);
+  const [bridgeOpen, setBridgeOpen] = useState(false);
   const exportDialog = useRef<HTMLDialogElement>(null);
   const [archiveMode, setArchiveMode] = useState<'backup' | 'restore' | null>(null);
   const [archivePassphrase, setArchivePassphrase] = useState('');
@@ -491,6 +497,10 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
   }
 
   async function openImage(id: string) {
+    if (currentRef.current?.document.image.id !== id) {
+      setBridgeOpen(false);
+      setCloudVisionOpen(false);
+    }
     if (!storage.current) throw new Error('Unlock the local workspace first.');
     const result = await storage.current.request({ type: 'workspace-read', id }, workspaceReadSchema);
     const url = URL.createObjectURL(new Blob([result.media], { type: 'image/png' }));
@@ -565,6 +575,22 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
     const before = history.current.snapshot();
     const next = history.current.execute(command, before.revision);
     await persistDocument(before, next, tiles);
+  }
+
+  async function editBatch(commands: readonly unknown[]) {
+    if (!history.current || !current) throw new Error('Open an image first.');
+    const before = history.current.snapshot();
+    const next = history.current.executeBatch(commands, before.revision);
+    await persistDocument(before, next);
+  }
+
+  async function applyBridgeCommands(commands: readonly unknown[], expectedRevision: number): Promise<AnnotationDocument> {
+    if (!history.current || !current) throw new Error('Open an image before applying companion proposals.');
+    const before = history.current.snapshot();
+    if (before.revision !== expectedRevision) throw new Error('The image changed after this proposal was received.');
+    const next = history.current.executeBatch(commands, expectedRevision);
+    await persistDocument(before, next);
+    return history.current.snapshot();
   }
 
   async function undoRedo(direction: 'undo' | 'redo') {
@@ -1131,6 +1157,27 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
     });
   }
 
+  async function addCloudSuggestions(suggestions: readonly SuggestedBox[]) {
+    if (!current || !classId) throw new Error('Select an annotation class before adding suggestions.');
+    const annotations: Annotation[] = suggestions.map(suggestion => {
+      const matchingClass = current.document.classes.find(item =>
+        item.name.localeCompare(suggestion.label, undefined, { sensitivity: 'accent' }) === 0);
+      return {
+          id: crypto.randomUUID(),
+          classId: matchingClass?.id ?? classId,
+          attributes: {
+            ai_source: 'cloud-vision-review',
+            ai_suggested_label: suggestion.label,
+            ai_confidence: suggestion.confidence,
+          },
+          kind: 'box',
+          ...suggestion.bounds,
+        };
+    });
+    await editBatch(annotations.map(annotation => ({ type: 'put', annotation })));
+    if (annotations.length) setSelected(annotations.at(-1)!.id);
+  }
+
   function chooseTool(next: Tool) {
     if (guest && (next === 'mask' || next === 'erase')) return;
     maskStroke.current = null;
@@ -1403,7 +1450,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
   }
 
   function handleKeys(event: KeyboardEvent<HTMLElement>) {
-    if (exportOpen || archiveMode) return;
+    if (exportOpen || archiveMode || cloudVisionOpen || bridgeOpen) return;
     if (event.target instanceof HTMLElement &&
         (event.target.matches('input, select, textarea') || event.target.isContentEditable)) return;
     if (busy) return;
@@ -1613,6 +1660,8 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
   ].filter(Boolean).join(' ');
 
   function returnToDataset() {
+    setBridgeOpen(false);
+    setCloudVisionOpen(false);
     cancelGesture(); setPolygon([]); setPolygonCursor(null); setCurrent(null); setSelected(null); history.current = null;
     maskPixels.current.clear(); setMaskUrls(new Map());
   }
@@ -1643,6 +1692,11 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
           onClick={showExport}><span className="step-number" aria-hidden="true">3</span>Export</button>}
       </div>
       <div className="project-nav-utilities">
+        {current && !guest && <button type="button" disabled={busy} onClick={() => setBridgeOpen(true)}>
+          Local MCP companion
+        </button>}
+        {current && !guest && <button type="button" disabled={busy || !current.document.classes.length}
+          onClick={() => setCloudVisionOpen(true)}>AI suggestions</button>}
         {!guest && <button type="button" disabled={busy || !!liveHost.current} aria-expanded={persistentSharingOpen}
           title={liveHost.current ? 'Stop live sharing before publishing or reviewing snapshots.' : 'Encrypted snapshots and approval-based contributions'}
           onClick={() => setPersistentSharingOpen(previous => !previous)}>Share workspace</button>}
@@ -2422,6 +2476,19 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
         </div>
       </form>
     </dialog>
+    {cloudVisionOpen && current && !guest && <Suspense fallback={<p role="status">Loading cloud vision controls…</p>}><CloudVisionDialog
+      imageUrl={current.url}
+      imageSize={current.document.image.canonical}
+      onClose={() => setCloudVisionOpen(false)}
+      onAccept={addCloudSuggestions}
+    /></Suspense>}
+    {bridgeOpen && current && !guest && <Suspense fallback={<p role="status">Loading local companion controls…</p>}><BridgePanel
+      key={current.document.image.id}
+      workspaceId={descriptor.id}
+      document={current.document}
+      onClose={() => setBridgeOpen(false)}
+      onApplyProposal={applyBridgeCommands}
+    /></Suspense>}
     {error && !exportOpen && !archiveMode && <div className="error" role="alert">{error}</div>}
     {notice && !current && <p className="workspace-notice" role="status">{notice}</p>}
     {busy && <p className="workspace-notice" role="status">Working locally…</p>}

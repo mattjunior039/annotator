@@ -8,7 +8,7 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('review'), review: reviewSchema }),
 ]);
 export type Command = z.infer<typeof commandSchema>;
-interface Change { forward: Command; inverse: Command }
+interface Change { forward: Command[]; inverse: Command[] }
 
 function mutate(doc: AnnotationDocument, command: Command): { next: AnnotationDocument; inverse: Command } {
   let annotations: Annotation[] = doc.annotations, review: ReviewState = doc.review;
@@ -38,6 +38,29 @@ function mutate(doc: AnnotationDocument, command: Command): { next: AnnotationDo
   return { next, inverse };
 }
 
+function applyCommands(document: AnnotationDocument, commands: readonly Command[], enforceLocks = false) {
+  let next = document;
+  const inverse: Command[] = [];
+  for (const command of commands) {
+    if (enforceLocks && (command.type === 'put' || command.type === 'remove')) {
+      const id = command.type === 'put' ? command.annotation.id : command.id;
+      const old = next.annotations.find(annotation => annotation.id === id);
+      if (old?.locked) {
+        const unlocked = command.type === 'put' && command.annotation.locked === false &&
+          JSON.stringify({ ...command.annotation, locked: true }) === JSON.stringify({ ...old, locked: true });
+        if (!unlocked) throw new Error('Unlock this annotation before changing or deleting it.');
+      }
+    }
+    const result = mutate(next, command);
+    next = result.next;
+    inverse.unshift(result.inverse);
+  }
+  return {
+    next: documentSchema.parse({ ...next, revision: document.revision + 1 }),
+    inverse,
+  };
+}
+
 // One history owns one image; entries retain changed annotations, not dataset snapshots.
 export class ImageHistory {
   private doc: AnnotationDocument;
@@ -63,18 +86,12 @@ export class ImageHistory {
     if (revision !== this.doc.revision) throw new Error('Stale image revision.');
   }
   execute(input: unknown, expectedRevision: number): AnnotationDocument {
+    return this.executeBatch([input], expectedRevision);
+  }
+  executeBatch(inputs: readonly unknown[], expectedRevision: number): AnnotationDocument {
     this.check(expectedRevision);
-    const forward = commandSchema.parse(input);
-    if (forward.type === 'put' || forward.type === 'remove') {
-      const id = forward.type === 'put' ? forward.annotation.id : forward.id;
-      const old = this.doc.annotations.find(annotation => annotation.id === id);
-      if (old?.locked) {
-        const unlocked = forward.type === 'put' && forward.annotation.locked === false &&
-          JSON.stringify({ ...forward.annotation, locked: true }) === JSON.stringify({ ...old, locked: true });
-        if (!unlocked) throw new Error('Unlock this annotation before changing or deleting it.');
-      }
-    }
-    const { next, inverse } = mutate(this.doc, forward);
+    const forward = z.array(commandSchema).min(1).max(1000).parse(inputs);
+    const { next, inverse } = applyCommands(this.doc, forward, true);
     this.doc = next;
     this.undoEntries.push({ forward, inverse });
     if (this.undoEntries.length > this.limit) this.undoEntries.shift();
@@ -85,7 +102,7 @@ export class ImageHistory {
     this.check(expectedRevision);
     const change = this.undoEntries.at(-1);
     if (!change) throw new Error('No edit to undo.');
-    this.doc = mutate(this.doc, change.inverse).next;
+    this.doc = applyCommands(this.doc, change.inverse).next;
     this.undoEntries.pop();
     this.redoEntries.push(change);
     return this.snapshot();
@@ -94,7 +111,7 @@ export class ImageHistory {
     this.check(expectedRevision);
     const change = this.redoEntries.at(-1);
     if (!change) throw new Error('No edit to redo.');
-    this.doc = mutate(this.doc, change.forward).next;
+    this.doc = applyCommands(this.doc, change.forward).next;
     this.redoEntries.pop();
     this.undoEntries.push(change);
     return this.snapshot();

@@ -16,24 +16,29 @@ function offlineShell(): Plugin {
       }, injectTo: 'head-prepend' }];
     },
     generateBundle(_options, bundle) {
-      const files = Object.keys(bundle).filter(file =>
+      const allFiles = Object.keys(bundle).filter(file =>
         file === 'index.html' || file === 'manifest.webmanifest' ||
-        /^assets\/.+\.(?:js|css|wasm|svg|woff2?)$/.test(file),
+        /^assets\/.+\.(?:js|mjs|css|wasm|svg|woff2?)$/.test(file),
       ).sort();
+      const modelRuntimeFiles = allFiles.filter(file => /^assets\/ort-wasm.*\.(?:mjs|wasm)$/.test(file));
+      const files = allFiles.filter(file => !modelRuntimeFiles.includes(file));
       const hash = createHash('sha256');
-      for (const file of files) {
+      for (const file of allFiles) {
         const output = bundle[file]!;
         hash.update(file).update(output.type === 'chunk' ? output.code : output.source);
       }
       const cacheVersion = hash.digest('hex').slice(0, 24);
       const prefix = `annotator-app-shell-${encodeURIComponent(base)}-`;
       const paths = [...new Set([base, `${base}manifest.webmanifest`, ...files.map(file => `${base}${file}`)])];
+      const modelRuntimePaths = modelRuntimeFiles.map(file => `${base}${file}`);
       const source = `
 const PREFIX = ${JSON.stringify(prefix)};
 const CACHE = PREFIX + ${JSON.stringify(cacheVersion)};
 const BASE = ${JSON.stringify(base)};
 const SHELL_PATHS = ${JSON.stringify(paths)};
+const MODEL_RUNTIME_PATHS = ${JSON.stringify(modelRuntimePaths)};
 const ASSETS = new Set(SHELL_PATHS.map(path => new URL(path, self.location.origin).pathname));
+const MODEL_RUNTIME = new Set(MODEL_RUNTIME_PATHS.map(path => new URL(path, self.location.origin).pathname));
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
@@ -61,6 +66,17 @@ self.addEventListener('fetch', event => {
       return (await cache.match(url.href, { ignoreVary: true })) ||
         (await cache.match(new URL(BASE, self.location.origin).href, { ignoreVary: true })) ||
         fetch(request);
+    })());
+    return;
+  }
+  if (MODEL_RUNTIME.has(url.pathname)) {
+    event.respondWith((async () => {
+      const cache = await caches.open(CACHE);
+      const saved = await cache.match(url.href, { ignoreVary: true });
+      if (saved) return saved;
+      const response = await fetch(request);
+      if (response.ok && response.type !== 'opaque') await cache.put(url.href, response.clone());
+      return response;
     })());
     return;
   }

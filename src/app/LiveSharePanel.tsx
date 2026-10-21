@@ -41,10 +41,12 @@ export function ParticipantList({ participants, images, you, onRemove }: {
 
 export function LiveSharePanel({ host, mode, onMode, onStart, onStop, ended, busy, images, onClose }: HostPanelProps) {
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState('');
   return <section className="workspace-card live-share" aria-label="Live share">
     <h2>Live share</h2>
     {!host && <>
-      <p>Invite people to annotate this workspace with you in real time. Your images stay in this browser: guests view and edit them through an end-to-end encrypted connection while this tab stays open.</p>
+      <p>Invite people to annotate your app-managed copy in real time; your original files are never modified. Approved guests receive images and annotations in their browser memory through an end-to-end encrypted connection while this tab stays open.</p>
+      <p>For a friend to work after you close this tab, use <strong>Share workspace</strong> to send an encrypted file or S3 snapshot instead.</p>
       <ul className="live-facts">
         <li>The invite link contains the session key. Share it only with people you trust, through a private channel.</li>
         <li>You approve each person after comparing a 6-digit code with them.</li>
@@ -69,9 +71,16 @@ export function LiveSharePanel({ host, mode, onMode, onStart, onStop, ended, bus
       <label className="live-invite">Invite link
         <span><input readOnly value={host.url} aria-label="Invite link" onFocus={event => event.currentTarget.select()} />
           <button type="button" onClick={() => {
-            void navigator.clipboard.writeText(host.url).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
+            setCopyError('');
+            void (async () => {
+              try {
+                await navigator.clipboard.writeText(host.url);
+                setCopied(true); setTimeout(() => setCopied(false), 2000);
+              } catch { setCopyError('Clipboard access was denied. Select the invite link above and copy it manually.'); }
+            })();
           }}>{copied ? 'Copied' : 'Copy link'}</button></span>
       </label>
+      {copyError && <p className="error" role="alert">{copyError}</p>}
       {host.pending.length > 0 && <div className="live-pending" role="region" aria-label="Join requests">
         <h3>Waiting to join</h3>
         {host.pending.map(request => <div className="live-request" key={request.id}>

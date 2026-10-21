@@ -2,7 +2,9 @@
 
 For owner-offline access with local working copies and approval-based submissions, use **Share workspace** instead. See [persistent-sharing.md](persistent-sharing.md); this is separate from the real-time session described below.
 
-Live share lets a workspace owner (the **host**) invite up to seven guests to annotate the same images in real time, similar to VS Code Live Share. The host's encrypted vault is the only copy of the dataset. Guests see it through an end-to-end encrypted session and never store it.
+Live share lets a workspace owner (the **host**) invite up to seven guests to annotate the same images in real time, similar to VS Code Live Share. The host's encrypted vault is the authoritative persistent copy. Guests receive decrypted images and annotations in memory; the app does not persist a guest workspace, but guests can retain screenshots or copy what they see.
+
+To start with images on your computer, create a workspace and choose **Add images** or **Add folder**. The app imports sanitized copies and does not modify your originals. Use the live flow below to edit together while your tab stays open. To give a friend a separate copy they can annotate while you are offline, use [encrypted file exchange](persistent-sharing.md#send-images-or-a-folder-to-a-friend-without-an-account); no storage account is needed.
 
 ## User flow
 
@@ -65,5 +67,5 @@ Deployment steps are in [deploy/README.md](../deploy/README.md#live-share-signal
 - The host's tab must stay open. Guests do not keep a copy after the session ends, apart from whatever the browser holds in memory and anything they screenshot or copy.
 - Removing a guest cannot revoke what they already saw. For future confidentiality, start a new session, which creates a new invite secret.
 - There is no TURN server yet. In direct mode, peers behind symmetric NATs stay on the relay, which still works.
-- Testing covers Chromium with up to 3 participants on one machine. Multi-network NAT testing and testing at 8 peers are still open.
+- Testing covers Chromium with eight participants (one host and seven guests) on one machine, through both the node relay and local Cloudflare Worker/Durable Object runtime. Shared edits reach every guest and host departure ends every guest session. Multi-network NAT testing and production load/recovery certification remain open.
 - The protocol has unit tests and end-to-end tests but has **not** had an independent cryptographic review. Do not describe it as audited.

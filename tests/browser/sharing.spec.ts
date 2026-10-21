@@ -204,3 +204,78 @@ test('unchanged imported masks remain valid; conflicting review edits block appr
   await expect(page.getByLabel('Review', { exact: true })).toHaveValue('reviewed');
   await context.close();
 });
+
+test('friends exchange encrypted files without storage accounts while the owner is offline', async ({ page, browser, baseURL }, testInfo) => {
+  const ownerContext = page.context();
+  const unexpected: string[] = [];
+  ownerContext.on('request', request => {
+    if (new URL(request.url()).origin !== new URL(baseURL!).origin && !request.url().startsWith('blob:')) unexpected.push(request.url());
+  });
+  await createWorkspace(page);
+  const ownerPanel = await sharing(page);
+  await ownerPanel.getByText('Send an encrypted file (no storage account needed)', { exact: true }).click();
+  await ownerPanel.getByLabel('File invitation label', { exact: true }).fill('Riley file copy');
+  await ownerPanel.getByRole('button', { name: 'Create encrypted share file', exact: true }).click();
+  const secret = await ownerPanel.getByLabel('File decryption secret', { exact: true }).inputValue();
+  expect(secret).toMatch(/^[A-Za-z0-9_-]{43}$/);
+  const snapshotDownload = page.waitForEvent('download');
+  await ownerPanel.getByRole('link', { name: 'Download encrypted file', exact: true }).click();
+  const snapshot = await snapshotDownload;
+  const snapshotPath = testInfo.outputPath('friend.annotator-share');
+  await snapshot.saveAs(snapshotPath);
+  await page.close();
+
+  const friendContext = await browser.newContext();
+  friendContext.on('request', request => {
+    if (new URL(request.url()).origin !== new URL(baseURL!).origin && !request.url().startsWith('blob:')) unexpected.push(request.url());
+  });
+  const friend = await friendContext.newPage();
+  await friend.goto('/');
+  await friend.getByText('Open a workspace invitation', { exact: true }).click();
+  await friend.getByRole('combobox', { name: 'Invitation source', exact: true }).selectOption('file');
+  await friend.getByLabel('Encrypted share file', { exact: true }).setInputFiles(snapshotPath);
+  const fileKey = friend.getByLabel('File decryption secret', { exact: true });
+  await fileKey.fill(`${secret[0] === 'A' ? 'B' : 'A'}${secret.slice(1)}`);
+  await friend.getByLabel('Local workspace name', { exact: true }).fill('Riley working copy');
+  await friend.getByLabel('Working copy passphrase', { exact: true }).fill('private working copy passphrase');
+  await friend.getByLabel('Confirm working copy passphrase', { exact: true }).fill('private working copy passphrase');
+  await friend.getByRole('button', { name: 'Import file & create local copy', exact: true }).click();
+  await expect(friend.getByRole('alert')).toBeVisible();
+  await expect(friend.locator('.gallery-item')).toHaveCount(0);
+  await fileKey.fill(secret);
+  await friend.getByLabel('Working copy passphrase', { exact: true }).fill('private working copy passphrase');
+  await friend.getByLabel('Confirm working copy passphrase', { exact: true }).fill('private working copy passphrase');
+  await friend.getByRole('button', { name: 'Import file & create local copy', exact: true }).click();
+  await expect(friend.locator('.gallery-item')).toHaveCount(2);
+  await draw(friend);
+  const friendPanel = await sharing(friend);
+  await friendPanel.getByLabel('Proposal author', { exact: true }).fill('Riley');
+  await friendPanel.getByLabel('Proposal summary', { exact: true }).fill('File exchange box');
+  await friendPanel.getByRole('button', { name: 'Create encrypted proposal file', exact: true }).click();
+  const proposalDownload = friend.waitForEvent('download');
+  await friendPanel.getByRole('link', { name: 'Download encrypted file', exact: true }).click();
+  const proposalPath = testInfo.outputPath('returned.annotator-proposal');
+  await (await proposalDownload).saveAs(proposalPath);
+  await friendContext.close();
+
+  const owner = await ownerContext.newPage();
+  await reopen(owner, 'Owner dataset');
+  await draw(owner, 17);
+  const panel = await sharing(owner);
+  await panel.getByLabel('Returned proposal file', { exact: true }).setInputFiles({
+    name: 'corrupt.annotator-proposal', mimeType: 'application/octet-stream', buffer: Buffer.from('not an encrypted proposal'),
+  });
+  await expect(owner.getByRole('alert')).toBeVisible();
+  await expect(panel.getByRole('region', { name: 'Proposal review', exact: true })).toHaveCount(0);
+  await expect(owner.locator('rect.annotation-shape')).toHaveCount(1);
+  await panel.getByLabel('Returned proposal file', { exact: true }).setInputFiles(proposalPath);
+  const review = panel.getByRole('region', { name: 'Proposal review', exact: true });
+  await expect(review).toContainText('Riley');
+  await expect(review).toContainText('1 added, 0 changed, 0 removed');
+  await review.getByRole('button', { name: 'Approve proposal', exact: true }).click();
+  await expect(owner.getByRole('img', { name: 'metadata.png annotation canvas', exact: true }).locator('rect.annotation-shape')).toHaveCount(2);
+  await owner.reload();
+  await reopen(owner, 'Owner dataset');
+  await expect(owner.locator('.gallery-item').filter({ hasText: 'metadata.png' })).toContainText('2 annotations');
+  expect(unexpected).toEqual([]);
+});

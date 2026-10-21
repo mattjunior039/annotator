@@ -131,3 +131,36 @@ test('direct mode upgrades to an encrypted WebRTC data channel and keeps syncing
   await expect(g.getByRole('heading', { name: 'Workspaces', exact: true })).toBeVisible();
   await expect(host.locator('.live-participants li')).toHaveCount(1);
 });
+
+test('eight participants receive shared edits and lose access when the host stops', async ({ page: host, browser }) => {
+  const guests: Page[] = [];
+  try {
+    await hostWorkspace(host);
+    const url = await startSharing(host);
+    for (let index = 1; index <= 7; index++) {
+      const name = `Friend ${index}`;
+      const guest = await requestJoin(browser, url, name);
+      guests.push(guest.page);
+      await expect(host.getByLabel(`Verification code for ${name}`, { exact: true })).toHaveText(guest.code);
+      await host.getByRole('button', { name: 'Codes match · approve', exact: true }).click();
+      await expect(guest.page.locator('.gallery-item')).toHaveCount(2);
+    }
+    await expect(host.getByRole('button', { name: 'Live · 8 people', exact: true })).toBeVisible();
+    const editor = guests[0]!;
+    await editor.locator('.gallery-open').filter({ hasText: 'metadata.png' }).click();
+    await editor.getByRole('button', { name: 'Box', exact: true }).click();
+    await canvasTools(editor, 'metadata.png').drag(2, 2, 12, 10);
+    await expect(editor.locator('.save-indicator')).toContainText('Saved to the host workspace');
+    await expect(host.locator('.gallery-item').filter({ hasText: 'metadata.png' })).toContainText('1 annotations');
+    for (const guest of guests.slice(1)) {
+      await expect(guest.locator('.gallery-item').filter({ hasText: 'metadata.png' })).toContainText('1 annotations');
+      await expect(guest.getByRole('status').filter({ hasText: 'Live · 8 people' })).toBeVisible();
+    }
+    await host.getByRole('button', { name: 'Stop live session', exact: true }).click();
+    for (const guest of guests) {
+      await expect(guest.getByRole('heading', { name: 'Live session ended', exact: true })).toBeVisible();
+    }
+  } finally {
+    await Promise.all(guests.map(guest => guest.context().close()));
+  }
+});

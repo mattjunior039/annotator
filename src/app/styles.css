@@ -333,6 +333,26 @@ button { font: inherit; }
 .export-dialog select, .export-dialog input[type=password] { display: block; width: 100%; margin-top: 8px; padding: 10px; border: 1px solid #dce1d8; border-radius: 5px; background: #fff; color: inherit; font: inherit; }
 .export-dialog .export-checkbox { display: flex; align-items: center; gap: 10px; }
 .export-dialog .export-warning { padding: 12px; border-radius: 6px; background: #fff9ed; color: #7a622d; font-size: 11px; }
+.cloud-vision-dialog { width: min(860px, calc(100% - 32px)); }
+.bridge-dialog { width: min(760px, calc(100% - 32px)); }
+.bridge-dialog fieldset, .bridge-dialog section, .bridge-dialog article { min-width: 0; margin: 16px 0; padding: 16px; border: 1px solid #dce1d8; border-radius: 6px; }
+.bridge-dialog legend { padding: 0 6px; font-weight: 600; }
+.bridge-dialog label:not(.protection-choice) { display: block; margin-top: 12px; }
+.bridge-dialog input:not([type=checkbox]) { box-sizing: border-box; display: block; width: 100%; margin-top: 6px; padding: 9px; border: 1px solid #dce1d8; border-radius: 5px; font: inherit; }
+.bridge-dialog .protection-choice { display: flex; align-items: flex-start; gap: 10px; margin: 12px 0; }
+.bridge-dialog .export-warning { padding: 12px; border-radius: 6px; background: #fff9ed; color: #7a622d; font-size: 12px; }
+.cloud-vision-fields fieldset, .cloud-vision-dialog section { min-width: 0; margin: 16px 0; padding: 16px; border: 1px solid #dce1d8; border-radius: 6px; }
+.cloud-vision-fields legend { padding: 0 6px; font-size: 14px; font-weight: 600; }
+.cloud-vision-fields input:not([type=checkbox]), .cloud-vision-fields textarea { box-sizing: border-box; display: block; width: 100%; margin-top: 6px; padding: 8px; border: 1px solid #dce1d8; border-radius: 5px; background: #fff; color: inherit; font: inherit; }
+.cloud-vision-fields textarea { min-height: 72px; resize: vertical; }
+.cloud-vision-fields fieldset > label:not(.protection-choice) { display: inline-block; width: calc(25% - 12px); margin-right: 12px; vertical-align: top; }
+.cloud-vision-fields .protection-choice { display: flex; align-items: flex-start; gap: 10px; }
+.cloud-redaction-form { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
+.cloud-redaction-form label { flex: 1 1 90px; margin-top: 8px; }
+.cloud-vision-dialog figure { margin: 12px 0; }
+.cloud-vision-dialog figure img { display: block; max-width: 100%; max-height: 360px; border: 1px solid #dce1d8; object-fit: contain; }
+.cloud-vision-dialog figcaption { margin-top: 6px; color: #555d52; font-size: 12px; }
+@media (max-width: 560px) { .cloud-vision-fields fieldset > label:not(.protection-choice) { width: calc(50% - 10px); } }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
 .primary-action { background: #39764d; color: white; border-color: #39764d; }
 @media (max-width: 1000px) {
