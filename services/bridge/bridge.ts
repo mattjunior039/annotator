@@ -1,87 +1,120 @@
-import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { z } from 'zod';
+import { randomBytes, randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
 import {
-  browserMessage, DATA_TTL, PAIR_TTL, pairingSchema, pairMessage,
-  proposalSchema, SESSION_TTL, snapshotSchema,
+  browserMessage, JOB_TTL, jobKinds, OFFLINE_AFTER, PAIR_TTL, pairCheck, pairCode, pairRequest, SESSION_TTL,
 } from './protocol.ts';
-import type { Scope, Snapshot } from './protocol.ts';
+import type { JobKind, Scope } from './protocol.ts';
 
+export type BridgeCode = 'denied' | 'invalid' | 'stale' | 'limited' | 'offline' | 'timeout' | 'declined' | 'failed';
 export class BridgeError extends Error {
-  readonly code: 'denied' | 'invalid' | 'stale' | 'limited';
-  constructor(code: BridgeError['code']) { super(code); this.code = code; }
+  readonly code: BridgeCode;
+  readonly detail: string | undefined;
+  constructor(code: BridgeCode, detail?: string) { super(code); this.code = code; this.detail = detail; }
 }
 const secret = () => randomBytes(32).toString('base64url');
 const equal = (left: string, right: string) => {
   const a = Buffer.from(left), b = Buffer.from(right);
   return a.length === b.length && timingSafeEqual(a, b);
 };
-type Proposal = z.infer<typeof proposalSchema> & { id: string };
-type Session = {
-  bearer: string; origin: string; workspaceId: string; scopes: Scope[]; expiresAt: number;
-  snapshot?: Snapshot; dataUntil: number; proposals: Proposal[];
+type Pending = {
+  origin: string; workspaceId: string; scopes: Scope[]; code: string; ticket: string;
+  expiresAt: number; confirmed: boolean; attempts: number;
 };
+type Job = {
+  id: string; kind: JobKind; args: unknown; delivered: boolean;
+  resolve: (value: unknown) => void; reject: (error: BridgeError) => void; timer: ReturnType<typeof setTimeout>;
+};
+type Session = {
+  bearer: string; origin: string; workspaceId: string; scopes: Scope[];
+  expiresAt: number; lastPoll: number; jobs: Job[];
+};
+type AuditEvent = 'paired' | 'cleared' | 'request' | 'result';
 
-/** Single editor process, one explicitly approved workspace, memory only. */
+/** One editor process, one browser-approved workspace. All state is memory-only. */
 export class Bridge {
   private readonly origins: readonly string[];
   private readonly now: () => number;
-  private pending: (z.infer<typeof pairingSchema> & { token: string; expiresAt: number }) | undefined;
+  private readonly jobTimeout: number;
+  private pending: Pending | undefined;
   private session: Session | undefined;
   private limits = new Map<string, { until: number; count: number }>();
-  private audit: { event: 'paired' | 'cleared' | 'proposal' | 'review'; at: number }[] = [];
+  private audit: { event: AuditEvent; at: number }[] = [];
 
-  constructor(origins: readonly string[], now = Date.now) { this.origins = origins; this.now = now; }
+  constructor(origins: readonly string[], now = Date.now, jobTimeout = JOB_TTL) {
+    this.origins = origins; this.now = now; this.jobTimeout = jobTimeout;
+  }
 
-  limit(bucket: 'http' | 'pair' | 'tool', max: number) {
+  limit(bucket: 'http' | 'pair' | 'code' | 'tool', max: number) {
     const previous = this.limits.get(bucket);
     const window = previous && previous.until > this.now() ? previous : { until: this.now() + 60_000, count: 0 };
     this.limits.set(bucket, window);
     if (++window.count > max) throw new BridgeError('limited');
   }
 
-  private record(event: 'paired' | 'cleared' | 'proposal' | 'review') {
+  private record(event: AuditEvent) {
     this.audit.push({ event, at: this.now() });
     if (this.audit.length > 100) this.audit.shift();
   }
 
   sweep() {
     if (this.pending && this.pending.expiresAt <= this.now()) this.pending = undefined;
-    if (this.session && this.session.expiresAt <= this.now()) this.clear();
-    if (this.session?.snapshot && this.session.dataUntil <= this.now()) {
-      delete this.session.snapshot;
-      this.session.proposals = [];
-    }
+    if (this.session && this.session.expiresAt <= this.now()) this.endSession();
+  }
+
+  private endSession() {
+    const session = this.session;
+    this.session = undefined;
+    for (const job of session?.jobs ?? []) { clearTimeout(job.timer); job.reject(new BridgeError('denied')); }
+    if (session) this.record('cleared');
   }
 
   clear() {
-    this.session = undefined;
     this.pending = undefined;
-    this.record('cleared');
+    this.endSession();
   }
 
-  beginPair(input: unknown) {
-    this.limit('pair', 5);
+  /** Browser asks to connect; the user then tells the editor the displayed code. */
+  requestPair(origin: string, input: unknown) {
+    this.limit('pair', 10);
     this.sweep();
-    const value = pairingSchema.safeParse(input);
+    const value = pairRequest.safeParse(input);
     if (!value.success) throw new BridgeError('invalid');
-    if (!this.origins.includes(value.data.origin) || this.session) throw new BridgeError('denied');
-    this.pending = { ...value.data, token: secret(), expiresAt: this.now() + PAIR_TTL };
-    return { token: this.pending.token, expiresAt: this.pending.expiresAt,
-      workspaceId: value.data.workspaceId, scopes: value.data.scopes };
+    if (!this.origins.includes(origin)) throw new BridgeError('denied');
+    const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
+    this.pending = { origin, workspaceId: value.data.workspaceId, scopes: value.data.scopes, code,
+      ticket: secret(), expiresAt: this.now() + PAIR_TTL, confirmed: false, attempts: 0 };
+    return { code, ticket: this.pending.ticket, expiresAt: this.pending.expiresAt };
   }
 
-  pair(origin: string, input: unknown) {
+  /** Editor (MCP tool) confirms the code shown in the browser. */
+  confirmPair(input: unknown) {
+    this.limit('code', 10);
     this.sweep();
-    const value = pairMessage.safeParse(input), pending = this.pending;
-    if (!value.success || !pending || !equal(value.data.token, pending.token) ||
-        pending.origin !== origin || pending.workspaceId !== value.data.workspaceId) throw new BridgeError('denied');
-    // A valid token is consumed even when approval requests an invalid scope.
+    const value = pairCode.safeParse(input);
+    const pending = this.pending;
+    if (!value.success || !pending || pending.confirmed) throw new BridgeError('denied', 'No connection request is waiting. Click Connect in the website first.');
+    const code = value.data.code.replace(/[\s-]/g, '');
+    if (!/^\d{6}$/.test(code) || !equal(code, pending.code)) {
+      if (++pending.attempts >= 5) this.pending = undefined;
+      throw new BridgeError('denied', 'That code does not match the one shown in the website.');
+    }
+    pending.confirmed = true;
+    return { connected: true, scopes: pending.scopes };
+  }
+
+  checkPair(origin: string, input: unknown) {
+    this.sweep();
+    const value = pairCheck.safeParse(input), pending = this.pending;
+    if (!value.success || !pending || pending.origin !== origin || !equal(value.data.ticket, pending.ticket)) {
+      throw new BridgeError('denied');
+    }
+    if (!pending.confirmed) return { state: 'pending' as const, expiresAt: pending.expiresAt };
     this.pending = undefined;
-    if (value.data.scopes.some(item => !pending.scopes.includes(item))) throw new BridgeError('denied');
-    this.session = { bearer: secret(), origin, workspaceId: pending.workspaceId, scopes: value.data.scopes,
-      expiresAt: this.now() + SESSION_TTL, dataUntil: 0, proposals: [] };
+    // A confirmed reconnect replaces an earlier browser session, for example after a page reload.
+    this.endSession();
+    this.session = { bearer: secret(), origin, workspaceId: pending.workspaceId, scopes: pending.scopes,
+      expiresAt: this.now() + SESSION_TTL, lastPoll: this.now(), jobs: [] };
     this.record('paired');
-    return { bearer: this.session.bearer, expiresAt: this.session.expiresAt };
+    return { state: 'paired' as const, bearer: this.session.bearer, expiresAt: this.session.expiresAt, scopes: this.session.scopes };
   }
 
   authenticate(origin: string, bearer: string) {
@@ -91,84 +124,67 @@ export class Bridge {
     }
   }
 
-  private active(scope?: Scope) {
-    this.sweep();
-    if (!this.session || (scope && !this.session.scopes.includes(scope))) throw new BridgeError('denied');
-    return this.session;
-  }
-
-  private data(scope: Scope) {
-    const session = this.active(scope);
-    if (!session.snapshot) throw new BridgeError('stale');
-    return { session, snapshot: session.snapshot };
-  }
-
   status() {
     this.sweep();
-    return { authorized: !!this.session, approvedDataAvailable: !!this.session?.snapshot,
-      fileVisibility: 'not-observed' as const, expiresAt: this.session?.expiresAt ?? null };
+    const session = this.session;
+    return {
+      connected: !!session,
+      browserOnline: !!session && this.now() - session.lastPoll < OFFLINE_AFTER,
+      scopes: session?.scopes ?? [],
+      expiresAt: session?.expiresAt ?? null,
+      waitingForCode: !!this.pending && !this.pending.confirmed,
+      pendingRequests: session?.jobs.length ?? 0,
+      recent: this.audit.slice(-10),
+    };
   }
 
   browser(origin: string, bearer: string, input: unknown) {
     this.authenticate(origin, bearer);
     const value = browserMessage.safeParse(input);
     if (!value.success) throw new BridgeError('invalid');
-    const message = value.data, session = this.active();
+    const message = value.data, session = this.session!;
     if (message.type === 'revoke' || message.type === 'lock') { this.clear(); return { cleared: true }; }
-    if (message.type === 'snapshot') {
-      if (session.snapshot && message.snapshot.revision < session.snapshot.revision) throw new BridgeError('stale');
-      // Identical revision refreshes may extend the lease but cannot change its data.
-      if (session.snapshot && message.snapshot.revision === session.snapshot.revision &&
-          JSON.stringify(message.snapshot) !== JSON.stringify(session.snapshot)) throw new BridgeError('stale');
-      session.snapshot = message.snapshot;
-      session.dataUntil = this.now() + DATA_TTL;
-      session.proposals = session.proposals.filter(item => item.baseRevision === message.snapshot.revision);
-      return { received: true };
+    if (message.type === 'poll') {
+      session.lastPoll = this.now();
+      const jobs = session.jobs.filter(job => !job.delivered).slice(0, 16);
+      for (const job of jobs) job.delivered = true;
+      return { authorized: true, expiresAt: session.expiresAt,
+        jobs: jobs.map(job => ({ id: job.id, kind: job.kind, args: job.args })) };
     }
-    if (message.type === 'review') {
-      const proposal = session.proposals.find(item => item.id === message.proposalId);
-      if (!proposal || !session.snapshot || proposal.baseRevision !== message.baseRevision ||
-          session.snapshot.revision !== message.baseRevision) throw new BridgeError('stale');
-      if (message.outcome === 'applied') {
-        if (message.snapshot.revision <= message.baseRevision) throw new BridgeError('stale');
-        session.snapshot = message.snapshot;
-        session.dataUntil = this.now() + DATA_TTL;
-        session.proposals = [];
-      } else session.proposals = session.proposals.filter(item => item.id !== proposal.id);
-      this.record('review');
-      return { received: true };
+    const job = session.jobs.find(item => item.id === message.jobId && item.delivered);
+    if (!job) throw new BridgeError('stale');
+    session.jobs = session.jobs.filter(item => item !== job);
+    clearTimeout(job.timer);
+    this.record('result');
+    if (!message.ok) { job.reject(new BridgeError(message.error, message.message)); return { received: true }; }
+    const parsed = jobKinds[job.kind].result.safeParse(message.value);
+    if (!parsed.success) { job.reject(new BridgeError('failed', 'The website returned an invalid result.')); return { received: true }; }
+    job.resolve(parsed.data);
+    return { received: true };
+  }
+
+  /** Forward a validated editor request to the paired browser and wait for its answer. */
+  call(kind: JobKind, args: unknown): Promise<unknown> {
+    this.sweep();
+    const session = this.session, spec = jobKinds[kind];
+    if (!session) return Promise.reject(new BridgeError('denied', 'Not connected. Open the website, click Connect, then call bridge_pair with the code shown.'));
+    if (!session.scopes.includes(spec.scope)) return Promise.reject(new BridgeError('denied', `The website did not grant the "${spec.scope}" permission.`));
+    const parsed = spec.input.safeParse(args ?? {});
+    if (!parsed.success) return Promise.reject(new BridgeError('invalid', parsed.error.issues.map(issue =>
+      `${issue.path.join('.') || 'input'}: ${issue.message}`).join('; ').slice(0, 500)));
+    if (this.now() - session.lastPoll >= OFFLINE_AFTER) {
+      return Promise.reject(new BridgeError('offline', 'The website is not responding. Keep the workspace tab open and connected.'));
     }
-    return { ...this.status(), proposals: session.proposals, audit: [...this.audit] };
-  }
-
-  metadata() {
-    return this.data('metadata').snapshot;
-  }
-
-  counts() {
-    const { snapshot } = this.data('counts');
-    return { revision: snapshot.revision, images: snapshot.images.length, annotations: snapshot.annotations.length,
-      classes: snapshot.classes.map(classId => ({
-        classId, count: snapshot.annotations.filter(item => item.classId === classId).length,
-      })) };
-  }
-
-  propose(input: unknown) {
-    const { session, snapshot } = this.data('propose');
-    const value = proposalSchema.safeParse(input);
-    if (!value.success) throw new BridgeError('invalid');
-    if (value.data.baseRevision !== snapshot.revision) throw new BridgeError('stale');
-    if (session.proposals.length >= 20) throw new BridgeError('limited');
-    const ids = value.data.operations.map(item => item.annotation.id);
-    if (new Set(ids).size !== ids.length) throw new BridgeError('invalid');
-    const annotations = snapshot.annotations.map(item =>
-      value.data.operations.find(operation => operation.annotation.id === item.id)?.annotation ?? item);
-    if (value.data.operations.some(operation => !snapshot.annotations.some(item =>
-      item.id === operation.annotation.id && item.imageId === operation.annotation.imageId)) ||
-        !snapshotSchema.safeParse({ ...snapshot, annotations }).success) throw new BridgeError('invalid');
-    const proposal = { ...value.data, id: randomUUID() };
-    session.proposals.push(proposal);
-    this.record('proposal');
-    return { proposalId: proposal.id, baseRevision: proposal.baseRevision, state: 'awaiting-browser-review' };
+    if (session.jobs.length >= 16) return Promise.reject(new BridgeError('limited'));
+    this.record('request');
+    return new Promise((resolve, reject) => {
+      const job: Job = { id: randomUUID(), kind, args: parsed.data, delivered: false, resolve, reject,
+        timer: setTimeout(() => {
+          if (this.session) this.session.jobs = this.session.jobs.filter(item => item !== job);
+          reject(new BridgeError('timeout', 'The website did not answer in time (it may still be waiting for your approval).'));
+        }, this.jobTimeout) };
+      job.timer.unref?.();
+      session.jobs.push(job);
+    });
   }
 }

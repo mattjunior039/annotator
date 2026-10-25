@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Bridge } from './bridge.ts';
 import { startBrowserServer, validateOptions } from './http.ts';
 import { MAX_BYTES } from './protocol.ts';
+import type { Scope } from './protocol.ts';
 
 const origin = 'http://127.0.0.1:5173';
 async function availablePort() {
@@ -33,8 +34,20 @@ function http(port: number, options: {
       response.on('end', () => resolve({ status: response.statusCode!, headers: response.headers, text }));
     });
     req.on('error', reject);
-    req.end(options.raw ?? JSON.stringify(options.body ?? { type: 'status' }));
+    req.end(options.raw ?? JSON.stringify(options.body ?? { type: 'poll' }));
   });
+}
+
+async function connect(port: number, confirm: (code: string) => Promise<void> | void, scopes: Scope[] = ['metadata', 'pixels', 'propose']) {
+  const request = await http(port, { path: '/pair', body: { type: 'pair-request', workspaceId: randomUUID(), scopes } });
+  expect(request.status).toBe(200);
+  const { code, ticket } = JSON.parse(request.text) as { code: string; ticket: string };
+  expect(JSON.parse((await http(port, { path: '/pair', body: { type: 'pair-check', ticket } })).text)).toMatchObject({ state: 'pending' });
+  await confirm(code);
+  const paired = await http(port, { path: '/pair', body: { type: 'pair-check', ticket } });
+  expect(paired.status).toBe(200);
+  expect((await http(port, { path: '/pair', body: { type: 'pair-check', ticket } })).status).toBe(403);
+  return (JSON.parse(paired.text) as { bearer: string }).bearer;
 }
 
 describe('browser loopback boundary', () => {
@@ -43,12 +56,7 @@ describe('browser loopback boundary', () => {
     port = await availablePort();
     bridge = new Bridge([origin]);
     server = await startBrowserServer(bridge, [origin], port);
-    const workspaceId = randomUUID();
-    const pairing = bridge.beginPair({ origin, workspaceId, scopes: ['counts'] });
-    const response = await http(port, { path: '/pair', body: { type: 'pair', token: pairing.token,
-      workspaceId, approved: true, scopes: ['counts'] } });
-    expect(response.status).toBe(200);
-    bearer = JSON.parse(response.text).bearer as string;
+    bearer = await connect(port, code => { bridge.confirmPair({ code }); }, ['metadata']);
   });
   afterAll(async () => {
     server.closeAllConnections();
@@ -89,84 +97,96 @@ describe('browser loopback boundary', () => {
     } })).status).toBe(403);
   });
 
-  it('authenticates before parsing commands and never reflects invalid payloads', async () => {
+  it('authenticates before reading large bodies and never reflects invalid payloads', async () => {
     expect((await http(port, { raw: 'SENSITIVE' })).status).toBe(403);
+    expect((await http(port, { path: '/pair', raw: 'x'.repeat(MAX_BYTES + 1) })).status).toBe(400);
     const headers = { authorization: `Bearer ${bearer}` };
     expect((await http(port, { headers, raw: 'SENSITIVE' })).text).toBe('{"error":"invalid"}');
     expect((await http(port, { headers, body: { type: 'read-file', path: 'SENSITIVE' } })).status).toBe(400);
     expect((await http(port, { headers: { ...headers, 'content-type': 'text/plain' } })).status).toBe(400);
-    expect((await http(port, { headers, raw: 'x'.repeat(MAX_BYTES + 1) })).status).toBe(400);
     expect((await http(port, { path: '/message?token=SENSITIVE', headers })).status).toBe(404);
     expect((await http(port, { path: '/mcp', headers })).status).toBe(404);
     expect((await http(port, { method: 'GET', headers })).status).toBe(405);
     const response = await http(port, { headers });
     expect(response.status).toBe(200);
     expect(response.headers['cache-control']).toBe('no-store');
-    expect(JSON.parse(response.text)).toMatchObject({ authorized: true, fileVisibility: 'not-observed' });
+    expect(JSON.parse(response.text)).toMatchObject({ authorized: true, jobs: [] });
   });
 
-  it('revokes promptly over HTTP and bounds unauthenticated request rates', async () => {
+  it('revokes promptly over HTTP and bounds request rates', async () => {
     const headers = { authorization: `Bearer ${bearer}` };
     expect((await http(port, { headers, body: { type: 'lock' } })).status).toBe(200);
     expect((await http(port, { headers })).status).toBe(403);
-    for (let i = 0; i < 120; i++) await http(port);
+    for (let i = 0; i < 1500; i++) await http(port);
     expect((await http(port)).status).toBe(429);
-    expect(bridge.status().authorized).toBe(false);
+    expect(bridge.status().connected).toBe(false);
   });
 });
 
 describe('real MCP stdio client interoperability', () => {
-  it('negotiates SDK lifecycle, pairs over HTTP, discloses allowlisted data, queues rather than applies, and revokes', async () => {
+  it('pairs by code, forwards list/view/annotate to the browser, returns image content, and revokes', async () => {
     const port = await availablePort();
     const transport = new StdioClientTransport({
       command: process.execPath, args: ['--experimental-strip-types', 'services/bridge/node-server.ts'],
       cwd: process.cwd(), env: { BRIDGE_PORT: String(port), BRIDGE_ORIGINS: origin },
-      stderr: 'pipe', maxBufferSize: MAX_BYTES,
+      stderr: 'pipe',
     });
     let stderr = '';
     transport.stderr?.on('data', chunk => { stderr += String(chunk); });
     const client = new Client({ name: 'bridge-integration-test', version: '1.0.0' });
     const call = async (name: string, args = {}) => {
       const response = await client.callTool({ name, arguments: args });
-      const content = response.content as { type: string; text: string }[];
-      return { error: response.isError, text: content[0]!.text };
+      const content = response.content as { type: string; text?: string; data?: string; mimeType?: string }[];
+      return { error: response.isError, content, text: content[0]?.text ?? '' };
     };
+    let polling = true;
     try {
       await client.connect(transport);
-      expect(client.getServerVersion()?.name).toBe('bounded-annotation-bridge');
+      expect(client.getServerVersion()?.name).toBe('annotator');
       expect((await client.listTools()).tools.map(tool => tool.name).sort()).toEqual([
-        'annotation_counts', 'annotation_metadata', 'bridge_pair', 'bridge_revoke', 'bridge_status', 'propose_annotation_patch',
+        'annotate', 'bridge_pair', 'bridge_revoke', 'bridge_status', 'get_annotations', 'list_images', 'view_images',
       ]);
-      expect((await client.listResources().catch(() => ({ resources: [] }))).resources).toEqual([]);
-      expect((await call('annotation_counts')).error).toBe(true);
-      const workspaceId = randomUUID();
-      const pairing = JSON.parse((await call('bridge_pair', {
-        origin, workspaceId, scopes: ['metadata', 'counts', 'propose'],
-      })).text) as { token: string };
-      const approval = { type: 'pair', workspaceId, token: pairing.token, approved: true, scopes: ['metadata', 'counts', 'propose'] };
-      const paired = await http(port, { path: '/pair', body: approval });
-      expect(paired.status).toBe(200);
-      expect((await http(port, { path: '/pair', body: approval })).status).toBe(403);
-      const { bearer } = JSON.parse(paired.text) as { bearer: string };
+      expect((await call('list_images')).error).toBe(true);
+      const bearer = await connect(port, async code => {
+        expect((await call('bridge_pair', { code })).error).toBeFalsy();
+      });
       const headers = { authorization: `Bearer ${bearer}` };
-      const classId = randomUUID(), imageId = randomUUID(), id = randomUUID();
-      const annotation = { id, imageId, classId, box: [1, 2, 3, 4], review: 'unreviewed' };
-      const snapshot = { revision: 7, classes: [classId], images: [{ id: imageId, width: 10, height: 10 }],
-        annotations: [annotation] };
-      expect((await http(port, { headers, body: { type: 'snapshot', snapshot } })).status).toBe(200);
-      expect(JSON.parse((await call('annotation_counts')).text)).toMatchObject({ revision: 7, images: 1, annotations: 1 });
-      expect(JSON.parse((await call('annotation_metadata')).text)).toEqual(snapshot);
-      const proposal = JSON.parse((await call('propose_annotation_patch', { baseRevision: 7,
-        operations: [{ type: 'replace-box', annotation: { ...annotation, box: [2, 2, 3, 4] } }] })).text) as { proposalId: string };
-      expect(proposal.proposalId).toBeTruthy();
-      expect(JSON.parse((await call('annotation_metadata')).text)).toEqual(snapshot);
-      const status = JSON.parse((await http(port, { headers })).text) as { proposals: unknown[] };
-      expect(status.proposals).toHaveLength(1);
+      const imageId = randomUUID(), classId = randomUUID(), added = randomUUID();
+      const jpeg = Buffer.from('fake-jpeg').toString('base64');
+      const answers: Record<string, unknown> = {
+        list: { total: 1, offset: 0, classes: [{ id: classId, name: 'car' }],
+          images: [{ id: imageId, width: 200, height: 100, review: 'unannotated', annotationCount: 0 }] },
+        images: { images: [{ id: imageId, width: 200, height: 100, sentWidth: 100, sentHeight: 50, mimeType: 'image/jpeg', data: jpeg }] },
+        annotate: { state: 'applied', createdClasses: ['truck'], images: [{ id: imageId, revision: 2, added: [added], updated: 0, removed: 0 }] },
+      };
+      const seen: unknown[] = [];
+      const browser = (async () => {
+        while (polling) {
+          const poll = await http(port, { headers });
+          if (poll.status !== 200) break;
+          for (const job of (JSON.parse(poll.text) as { jobs: { id: string; kind: string; args: unknown }[] }).jobs) {
+            seen.push(job.args);
+            await http(port, { headers, body: { type: 'result', jobId: job.id, ok: true, value: answers[job.kind] } });
+          }
+          await new Promise(resolve => setTimeout(resolve, 20));
+        }
+      })();
+      expect(JSON.parse((await call('list_images', { review: 'unannotated' })).text)).toEqual(answers.list);
+      const view = await call('view_images', { imageIds: [imageId] });
+      expect(view.error).toBeFalsy();
+      expect(view.content[1]).toEqual({ type: 'image', data: jpeg, mimeType: 'image/jpeg' });
+      expect(JSON.parse(view.content[0]!.text!)).toMatchObject({ scaleToOriginal: 2 });
+      const annotate = { edits: [{ imageId, add: [{ label: 'truck', box: [1, 2, 30, 40] }] }] };
+      expect(JSON.parse((await call('annotate', annotate)).text)).toEqual(answers.annotate);
+      expect(seen).toContainEqual(annotate);
+      expect(JSON.parse((await call('bridge_status')).text)).toMatchObject({ connected: true, browserOnline: true });
       await call('bridge_revoke');
-      expect((await call('annotation_metadata')).error).toBe(true);
+      polling = false;
+      await browser;
+      expect((await call('list_images')).error).toBe(true);
       expect((await http(port, { headers })).status).toBe(403);
-      for (const sensitive of [pairing.token, bearer, workspaceId, imageId]) expect(stderr).not.toContain(sensitive);
+      for (const sensitive of [bearer, imageId]) expect(stderr).not.toContain(sensitive);
       expect(stderr).toBe('');
-    } finally { await client.close(); }
-  }, 15_000);
+    } finally { polling = false; await client.close(); }
+  }, 20_000);
 });

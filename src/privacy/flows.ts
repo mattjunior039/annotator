@@ -109,15 +109,15 @@ export const privacyFlows = [
     caveat: 'Snapshots are capped at 64 MiB plus a small header and assembled in memory. Manual file exchange is not automatic sync or revocable access.',
   },
   {
-    id: 'mcp-bridge', view: 'ai', title: 'Local companion / MCP bridge', availability: 'implemented',
-    prerequisite: 'Separately install the companion, configure Copilot or Antigravity, manually enter a single-use token and explicitly approve scopes for the current image.',
-    disclosures: ['metadata'],
-    summary: 'Approved current-image box metadata → authenticated loopback companion → standard stdio MCP assistant. Localhost is only one hop.',
+    id: 'mcp-bridge', view: 'ai', title: 'AI editor (Copilot / Antigravity via MCP)', availability: 'implemented',
+    prerequisite: 'Install the local companion, configure Copilot or Antigravity, click Connect and give the editor the 6-digit code. Choose read, view-images and edit permissions.',
+    disclosures: ['metadata', 'plaintext-pixels'],
+    summary: 'Browser ↔ authenticated loopback companion ↔ editor over standard MCP stdio → the editor\'s AI service. Localhost is only one hop.',
     steps: [
-      { boundary: 'Browser → loopback companion', bytes: 'Visible boxes, opaque IDs, dimensions, counts, coordinates, class IDs and review state; not pixels, thumbnails, filenames, EXIF, arbitrary text, credentials or vault keys.', protection: 'Exact origin/Host checks, scoped bearer, 15-minute authorization and 60-second data lease. Single-use pairing expires after 60 seconds.', visible: 'Coordinates can themselves be sensitive. Local processes are not automatically trusted.' },
-      { boundary: 'Companion → MCP client / possible external provider', bytes: 'Only explicitly scoped tool results; existing-box replacements require revision validation and separate browser review.', protection: 'Official SDK standard stdio transport. Applied proposals form one undoable transaction. Never disable browser mixed-content/local-network rules.', visible: 'An external assistant may forward tool results to its cloud backend. A localhost hop is not an end-to-end local-only guarantee.' },
+      { boundary: 'Browser → loopback companion', bytes: 'Opaque image IDs, sizes, review states, class names and annotation geometry. With the view permission, JPEG copies of images the user approves (or all requested images if auto-share is on). Never filenames, paths, EXIF, free-text attributes, mask pixels, credentials or vault keys.', protection: 'Exact origin/Host checks, a one-time 6-digit code confirmed by the editor, a bearer held only in browser memory and an 8-hour session limit. Disconnect or lock revokes immediately.', visible: 'Image pixels can identify people. Class names and coordinates can themselves be sensitive. Local processes are not automatically trusted.' },
+      { boundary: 'Companion → MCP client → editor AI provider', bytes: 'Tool results, including approved images, go to the editor and normally to its cloud model.', protection: 'Official SDK standard stdio transport. Edits are validated by the app\'s domain rules, either reviewed or auto-applied, and each batch can be undone.', visible: 'The editor\'s AI provider receives what you share and may forward tool results to its cloud backend. A localhost hop is not an end-to-end local-only guarantee.' },
     ],
-    caveat: 'SDK/browser pairing is tested; actual editor applications and deployed HTTPS loopback permissions remain uncertified. The static website does not launch the companion or prove dataset file visibility.',
+    caveat: 'Tested with VS Code\'s own MCP client and the official SDK; Antigravity uses the same stdio configuration but its app was not launched in automated tests. The website does not start the companion.',
   },
   {
     id: 'local-inference', view: 'ai', title: 'Local inference', availability: 'implemented',

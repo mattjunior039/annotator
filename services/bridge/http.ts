@@ -1,21 +1,21 @@
 import { createServer } from 'node:http';
 import type { IncomingMessage, Server } from 'node:http';
 import { Bridge, BridgeError } from './bridge.ts';
-import { MAX_BYTES, originSchema, PORT } from './protocol.ts';
+import { MAX_BYTES, MAX_RESULT_BYTES, originSchema, PORT } from './protocol.ts';
 
 export function validateOptions(port: number, origins: readonly string[]) {
   if (!Number.isInteger(port) || port < 1024 || port > 65535 || origins.length === 0 ||
       origins.some(origin => !originSchema.safeParse(origin).success)) throw new Error('Invalid bridge configuration');
 }
 
-async function body(request: IncomingMessage) {
+async function body(request: IncomingMessage, limit = MAX_BYTES) {
   if (request.headers['content-type'] !== 'application/json' ||
       request.headers['content-encoding'] !== undefined) throw new BridgeError('invalid');
   const chunks: Buffer[] = [];
   let bytes = 0;
   for await (const chunk of request) {
     bytes += Buffer.byteLength(chunk);
-    if (bytes > MAX_BYTES) throw new BridgeError('invalid');
+    if (bytes > limit) throw new BridgeError('invalid');
     chunks.push(Buffer.from(chunk));
   }
   try { return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown; }
@@ -41,7 +41,7 @@ export async function startBrowserServer(bridge: Bridge, origins: readonly strin
           !origin || !origins.includes(origin)) { send(403, { error: 'denied' }); return; }
       response.setHeader('access-control-allow-origin', origin);
       response.setHeader('vary', 'Origin');
-      bridge.limit('http', 120);
+      bridge.limit('http', 1500);
       if (!['/pair', '/message'].includes(request.url ?? '')) { send(404, { error: 'not-found' }); return; }
       if (request.method === 'OPTIONS') {
         const headers = (request.headers['access-control-request-headers'] ?? '').toLowerCase()
@@ -59,7 +59,10 @@ export async function startBrowserServer(bridge: Bridge, origins: readonly strin
       }
       if (request.method !== 'POST') { send(405, { error: 'method' }); return; }
       if (request.url === '/pair') {
-        send(200, bridge.pair(origin, await body(request))); return;
+        const value = await body(request);
+        send(200, value && typeof value === 'object' && 'type' in value && value.type === 'pair-check'
+          ? bridge.checkPair(origin, value) : bridge.requestPair(origin, value));
+        return;
       }
       const auth = request.headers.authorization;
       if (countHeader('authorization') !== 1 || !auth?.match(/^Bearer [A-Za-z0-9_-]{43}$/)) {
@@ -67,15 +70,16 @@ export async function startBrowserServer(bridge: Bridge, origins: readonly strin
       }
       const bearer = auth.slice(7);
       bridge.authenticate(origin, bearer);
-      send(200, bridge.browser(origin, bearer, await body(request)));
+      // Authenticated before reading: only the paired browser may upload approved images.
+      send(200, bridge.browser(origin, bearer, await body(request, MAX_RESULT_BYTES)));
     } catch (error) {
       const code = error instanceof BridgeError ? error.code : 'invalid';
       send(code === 'denied' ? 403 : code === 'limited' ? 429 : code === 'stale' ? 409 : 400, { error: code });
     }
   });
-  server.requestTimeout = 5000;
+  server.requestTimeout = 15_000;
   server.headersTimeout = 5000;
-  server.timeout = 5000;
+  server.timeout = 15_000;
   server.keepAliveTimeout = 1000;
   server.maxConnections = 16;
   server.maxHeadersCount = 32;

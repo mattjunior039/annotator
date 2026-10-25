@@ -92,6 +92,24 @@ self.addEventListener('fetch', event => {
   };
 }
 
+// Static hosts such as Cloudflare Pages reject files over 25 MiB; ship the ONNX runtime in two parts.
+export const WASM_PART_BYTES = 16 * 1024 * 1024;
+function splitModelRuntime(): Plugin {
+  return {
+    name: 'annotator-split-model-runtime',
+    generateBundle(_options, bundle) {
+      for (const [file, output] of Object.entries(bundle)) {
+        if (!/^assets\/ort-wasm.*\.wasm$/.test(file) || output.type !== 'asset') continue;
+        const bytes = typeof output.source === 'string' ? new TextEncoder().encode(output.source) : output.source;
+        if (bytes.byteLength <= WASM_PART_BYTES) continue;
+        delete bundle[file];
+        this.emitFile({ type: 'asset', fileName: file.replace(/\.wasm$/, '.part0.wasm'), source: bytes.subarray(0, WASM_PART_BYTES) });
+        this.emitFile({ type: 'asset', fileName: file.replace(/\.wasm$/, '.part1.wasm'), source: bytes.subarray(WASM_PART_BYTES) });
+      }
+    },
+  };
+}
+
 // Local development and tests: `npm run signaling` serves the relay that production routes to a Cloudflare Worker.
 const signalingProxy = {
   '/signal': { target: `ws://127.0.0.1:${process.env.SIGNALING_PORT ?? 8787}`, ws: true },
@@ -113,5 +131,5 @@ export default defineConfig({
   preview: { host: '127.0.0.1', strictPort: true, headers: productionHeaders, proxy: signalingProxy },
   build: { target: 'es2023', sourcemap: false },
   base: process.env.VITE_BASE_PATH ?? '/',
-  plugins: [{ ...offlineShell(), apply: 'build' }],
+  plugins: [{ ...splitModelRuntime(), apply: 'build' }, { ...offlineShell(), apply: 'build' }],
 });

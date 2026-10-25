@@ -254,7 +254,7 @@ export function CloudVisionDialog({ imageUrl, imageSize, onClose, onAccept }: Cl
       <form onSubmit={event => void analyze(event)}>
         <fieldset>
           <legend>Bring your own key (BYOK)</legend>
-          <p>Use your own provider API key and a vision-capable model ID from that provider. Requests are billed by the provider. Keys are kept only in this dialog's memory, never saved or shared with friends. Copilot and Antigravity subscriptions connect through the separate Local MCP companion, not as API keys here.</p>
+          <p>Use your own provider API key and a vision-capable model ID from that provider. Requests are billed by the provider. Keys are kept only in this dialog's memory, never saved or shared with friends. Copilot and Antigravity connect through the separate AI editor button, not as API keys here.</p>
           <label>AI provider<select value={provider} disabled={busy} onChange={event => {
             const selected = visionProviders.find(item => item.id === event.target.value);
             setProvider(selected?.id ?? 'custom'); setEndpoint(selected?.endpoint ?? '');

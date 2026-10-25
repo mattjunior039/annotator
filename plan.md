@@ -11,7 +11,7 @@ Delivery order:
 1. Local-first annotator, including offline operation, complete annotation tools, encrypted local persistence, and interchange.
 2. Live peer collaboration.
 3. Encrypted asynchronous cloud sync, then additional provider adapters.
-4. AI integration, starting with metadata-only local bridge access.
+4. AI integration, starting with a local MCP bridge (metadata first; per-request approved image viewing was later added at the user's request).
 
 Execution is phase-based: complete and verify one phase, report its deliverables and remaining limitations, and obtain explicit direction before starting the next phase. Approval of this roadmap alone does not authorize implementing every phase at once.
 
@@ -611,7 +611,7 @@ The following phases are the execution units. The task IDs in each phase refer t
 - Implement single-use pairing, origin/host validation, capability scopes, expiry, and immediate revocation.
 - Expose read-only coordinate/count tools and reviewed, revision-bound mutation proposals.
 - Task IDs: `bridge-spike`, `metadata-ai`.
-- **Deliverable:** An opt-in local bridge that helps inspect/fix annotations without a pixel-reading capability.
+- **Deliverable:** An opt-in local bridge that helps inspect/fix annotations. *Revised 2026-10-24 at the user's direction:* editors may also view images the user approves (or auto-shares) and apply dataset-wide edits that are reviewed or auto-applied with batch undo.
 - **Gate:** Pairing, authorization, schema, stale-patch, and lock/revocation tests pass; tool outputs contain no pixels, filenames, paths, GPS, keys, or unauthorized attributes.
 - **Not included:** An assurance that an external editor assistant keeps disclosed coordinates/labels off its own cloud backend.
 

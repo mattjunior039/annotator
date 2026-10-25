@@ -90,7 +90,7 @@ test('workspace dashboard and editor meet automated WCAG 2.2 AA checks', async (
   expect(externalRequests).toEqual([]);
   await page.getByRole('button', { name: 'Close AI suggestions' }).click();
 
-  await page.getByRole('button', { name: 'Local MCP companion' }).click();
-  await checkAccessibility(page, 'Local MCP pairing and scope dialog');
-  await page.getByRole('button', { name: 'Close companion' }).click();
+  await page.getByRole('button', { name: 'AI editor', exact: true }).click();
+  await checkAccessibility(page, 'AI editor connection panel');
+  await page.getByRole('region', { name: 'AI editor connection' }).getByRole('button', { name: 'Hide' }).click();
 });

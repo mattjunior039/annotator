@@ -1,0 +1,16 @@
+{
+  "servers": {
+    "annotator": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "--experimental-strip-types",
+        "${workspaceFolder}/services/bridge/node-server.ts"
+      ],
+      "env": {
+        "BRIDGE_ORIGINS": "https://easyannotate.online,https://annotator-9hg.pages.dev,https://mattjunior039.github.io,http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:4173,http://127.0.0.1:4175",
+        "BRIDGE_PORT": "47321"
+      }
+    }
+  }
+}

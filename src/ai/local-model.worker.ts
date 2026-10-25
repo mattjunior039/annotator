@@ -15,7 +15,22 @@ env.useBrowserCache = true;
 env.useWasmCache = false;
 env.logLevel = 40;
 if (!env.backends.onnx.wasm) throw new Error('The local WASM runtime is unavailable.');
-env.backends.onnx.wasm.wasmPaths = { mjs: wasmFactoryUrl, wasm: wasmUrl };
+const wasmSettings = env.backends.onnx.wasm;
+wasmSettings.wasmPaths = { mjs: wasmFactoryUrl, wasm: wasmUrl };
+
+// Production builds split the runtime (see vite.config.ts); development serves it whole.
+async function loadRuntime() {
+  if (import.meta.env.DEV || wasmSettings.wasmBinary) return;
+  const parts = await Promise.all(['.part0.wasm', '.part1.wasm'].map(async suffix => {
+    const response = await fetch(wasmUrl.replace(/\.wasm$/, suffix), { credentials: 'same-origin' });
+    if (!response.ok) throw new Error('The local inference runtime could not be loaded from this site.');
+    return new Uint8Array(await response.arrayBuffer());
+  }));
+  const joined = new Uint8Array(parts[0]!.byteLength + parts[1]!.byteLength);
+  joined.set(parts[0]!); joined.set(parts[1]!, parts[0]!.byteLength);
+  wasmSettings.wasmBinary = joined;
+  wasmSettings.wasmPaths = { mjs: wasmFactoryUrl };
+}
 
 self.onmessage = async (event: MessageEvent<{ image: Blob; backend: 'wasm' | 'webgpu' }>) => {
   const { image, backend: requestedBackend } = event.data;
@@ -28,6 +43,8 @@ self.onmessage = async (event: MessageEvent<{ image: Blob; backend: 'wasm' | 'we
       detector = null;
     }
     if (!detector) {
+      self.postMessage({ type: 'progress', message: 'Loading the local inference runtime…' });
+      await loadRuntime();
       self.postMessage({ type: 'progress', message: 'Loading the pinned detector model into this worker…' });
       detector = await pipeline('object-detection', MODEL, {
         revision: REVISION,

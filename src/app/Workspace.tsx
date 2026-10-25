@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { ImageHistory } from '../domain/history';
+import type { Command } from '../domain/history';
 import { documentSchema } from '../domain/model';
 import type { Annotation, AnnotationDocument } from '../domain/model';
 import { applyDatasetSchema, datasetSchemaSchema } from '../domain/dataset-schema';
@@ -28,6 +29,12 @@ import type { ConnectionMode } from '../collaboration/link';
 import type { Participant } from '../collaboration/protocol';
 import { LiveSharePanel, ParticipantList } from './LiveSharePanel';
 import { SharePanel } from './SharePanel';
+import { EditorPanel } from './EditorPanel';
+import { EditorRequestError, useEditorBridge } from '../ai/useEditorBridge';
+import type { AppliedBatch, ImageForEditor } from '../ai/useEditorBridge';
+import { describeAnnotations, EditRejected, missingClasses, planImageEdit, withClasses } from '../ai/editor-edits';
+import type { AnnotateInput } from '../../services/bridge/protocol';
+import { diffDocuments } from '../collaboration/merge';
 import type { SuggestedBox } from '../ai/cloud-vision';
 import {
   mediaResultSchema, statusSchema, workspaceDeleteSchema, workspaceImportSchema,
@@ -40,7 +47,6 @@ import type { SchemaMigrationPreview, VaultStatus, WorkspaceDescriptor } from '.
 import { recoverySecretSchema } from '../crypto/vault';
 
 const CloudVisionDialog = lazy(() => import('../ai/CloudVisionDialog').then(module => ({ default: module.CloudVisionDialog })));
-const BridgePanel = lazy(() => import('./BridgePanel').then(module => ({ default: module.BridgePanel })));
 
 export type Tool = 'box' | 'polygon' | 'line' | 'label' | 'keypoints' | 'mask' | 'erase' | 'select' | 'pan';
 interface SizedSanitizedImage { png: ArrayBuffer; width: number; height: number }
@@ -243,7 +249,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
   const [sharingOpen, setSharingOpen] = useState(false);
   const [persistentSharingOpen, setPersistentSharingOpen] = useState(false);
   const [cloudVisionOpen, setCloudVisionOpen] = useState(false);
-  const [bridgeOpen, setBridgeOpen] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
   const exportDialog = useRef<HTMLDialogElement>(null);
   const [archiveMode, setArchiveMode] = useState<'backup' | 'restore' | null>(null);
   const [archivePassphrase, setArchivePassphrase] = useState('');
@@ -498,7 +504,6 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
 
   async function openImage(id: string) {
     if (currentRef.current?.document.image.id !== id) {
-      setBridgeOpen(false);
       setCloudVisionOpen(false);
     }
     if (!storage.current) throw new Error('Unlock the local workspace first.');
@@ -542,7 +547,9 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
   }
 
   async function persistDocument(before: AnnotationDocument, next: AnnotationDocument, tiles: MaskTile[] = []) {
-    if (!storage.current || !current) throw new Error('Open an image in the local workspace first.');
+    // Uses refs, not render state: AI-editor batches and their undo run from closures of earlier renders.
+    const open = currentRef.current;
+    if (!storage.current || !open) throw new Error('Open an image in the local workspace first.');
     setNotice('Saving…');
     let saved = next;
     try {
@@ -563,7 +570,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
       } : item));
       setNotice(guest ? 'Saved to the host workspace' : liveHost.current ? 'Saved on this device · shared live' : 'Saved on this device');
     } catch (failure) {
-      history.current = new ImageHistory(currentRef.current?.document ?? current.document);
+      history.current = new ImageHistory(currentRef.current?.document ?? open.document);
       throw failure;
     }
     const masks = (doc: AnnotationDocument) => JSON.stringify(doc.annotations.filter(item => item.kind === 'mask'));
@@ -584,14 +591,188 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
     await persistDocument(before, next);
   }
 
-  async function applyBridgeCommands(commands: readonly unknown[], expectedRevision: number): Promise<AnnotationDocument> {
-    if (!history.current || !current) throw new Error('Open an image before applying companion proposals.');
-    const before = history.current.snapshot();
-    if (before.revision !== expectedRevision) throw new Error('The image changed after this proposal was received.');
-    const next = history.current.executeBatch(commands, expectedRevision);
-    await persistDocument(before, next);
-    return history.current.snapshot();
+  const imageIndexRef = useRef(imageIndex);
+  imageIndexRef.current = imageIndex;
+
+  // Serializes AI-editor writes with the user's own edits instead of dropping them like perform() would.
+  async function exclusive<T>(action: () => Promise<T>): Promise<T> {
+    const deadline = Date.now() + 60_000;
+    while (running.current) {
+      if (Date.now() > deadline) throw new EditorRequestError('failed', 'The workspace stayed busy; try again.');
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    running.current = true;
+    setBusy(true);
+    try { return await action(); } finally { running.current = false; setBusy(false); }
   }
+
+  function indexed(id: string) {
+    const item = imageIndexRef.current.find(entry => entry.id === id);
+    if (!item) throw new EditorRequestError('stale', 'Unknown image id; call list_images again.');
+    return item;
+  }
+
+  async function readForEditor(id: string): Promise<{ document: AnnotationDocument; media?: ArrayBuffer }> {
+    indexed(id);
+    if (!storage.current) throw new EditorRequestError('failed', 'The workspace is locked.');
+    if (currentRef.current?.document.image.id === id && history.current) return { document: history.current.snapshot() };
+    const result = await storage.current.request({ type: 'workspace-read', id }, workspaceReadSchema);
+    return { document: documentSchema.parse(result.document), media: result.media };
+  }
+
+  async function saveEditorSchema(next: DatasetSchema) {
+    if (!storage.current) throw new EditorRequestError('failed', 'The workspace is locked.');
+    const result = await storage.current.request({
+      type: 'schema-update', expectedRevision: schemaRef.current?.revision ?? 0, schema: next,
+    }, schemaProgressSchema);
+    schemaRef.current = result.schema;
+    setDatasetSchema(result.schema);
+    const open = currentRef.current;
+    if (open && history.current) {
+      const document = applyDatasetSchema(history.current.snapshot(), result.schema);
+      history.current = new ImageHistory(document);
+      currentRef.current = { ...open, document };
+      setCurrent(previous => previous ? { ...previous, document } : previous);
+    }
+    return result.schema;
+  }
+
+  // Writes an AI-editor change through the same paths as manual edits; the current image keeps its undo history.
+  async function commitEditorChange(before: AnnotationDocument, commands: Command[]): Promise<AnnotationDocument> {
+    const id = before.image.id;
+    if (currentRef.current?.document.image.id === id && history.current) {
+      const base = history.current.snapshot();
+      const next = history.current.executeBatch(commands, base.revision);
+      await persistDocument(base, next);
+      return history.current.snapshot();
+    }
+    if (!storage.current) throw new EditorRequestError('failed', 'The workspace is locked.');
+    const next = new ImageHistory(before).executeBatch(commands, before.revision);
+    let saved = next;
+    if (liveHost.current) saved = await liveHost.current.commitLocal(before, next, []);
+    else await storage.current.request({
+      type: 'workspace-update', id, expectedRevision: before.revision, document: next, tiles: [],
+    }, workspaceWriteSchema);
+    setImageIndex(previous => previous.map(item => item.id === id
+      ? { ...item, review: saved.review, annotationCount: saved.annotations.length } : item));
+    return saved;
+  }
+
+  async function planEditorEdits(input: AnnotateInput, schema: DatasetSchema) {
+    const plans = [];
+    for (const edit of input.edits) {
+      const { document: stored } = await readForEditor(edit.imageId);
+      const document = applyDatasetSchema(stored, schema);
+      if (edit.expectedRevision !== undefined && edit.expectedRevision !== document.revision) {
+        throw new EditorRequestError('stale', `Image ${edit.imageId} is at revision ${document.revision}, not ${edit.expectedRevision}; re-read it.`);
+      }
+      try {
+        const plan = planImageEdit(document, edit, input.units ?? 'pixels');
+        if (plan.commands.length) new ImageHistory(document).executeBatch(plan.commands, document.revision);
+        plans.push({ document, plan });
+      } catch (failure) {
+        if (failure instanceof EditRejected) throw new EditorRequestError('invalid', `Image ${edit.imageId}: ${failure.message}`);
+        throw new EditorRequestError('invalid', `Image ${edit.imageId}: the edit does not fit the image or its annotations.`);
+      }
+    }
+    return plans;
+  }
+
+  function editorSummary(plans: Awaited<ReturnType<typeof planEditorEdits>>, created: readonly string[]) {
+    const added = plans.reduce((sum, item) => sum + item.plan.added.length, 0);
+    const updated = plans.reduce((sum, item) => sum + item.plan.updated, 0);
+    const removed = plans.reduce((sum, item) => sum + item.plan.removed, 0);
+    return [`${added} added, ${updated} changed, ${removed} removed on ${plans.length} image${plans.length === 1 ? '' : 's'}`,
+      ...(created.length ? [`new classes: ${created.join(', ')}`] : [])].join('; ');
+  }
+
+  const editorBridge = useEditorBridge(descriptor.id, {
+    list({ offset = 0, limit = 50, review }) {
+      const items = imageIndexRef.current.filter(item => !review || item.review === review);
+      return {
+        total: items.length, offset,
+        images: items.slice(offset, offset + limit).map(item => ({
+          id: item.id, width: item.width, height: item.height, review: item.review, annotationCount: item.annotationCount,
+        })),
+        classes: (schemaRef.current?.classes ?? []).map(item => ({ id: item.id, name: item.name })),
+      };
+    },
+    async annotations(ids) {
+      const images = [];
+      for (const id of ids) {
+        const { document } = await readForEditor(id);
+        images.push({ id, width: document.image.canonical.width, height: document.image.canonical.height,
+          revision: document.revision, review: document.review, annotations: describeAnnotations(document) });
+      }
+      return { images };
+    },
+    async images(ids) {
+      const images: ImageForEditor[] = [];
+      for (const id of ids) {
+        const item = indexed(id);
+        if (!storage.current) throw new EditorRequestError('failed', 'The workspace is locked.');
+        const result = await storage.current.request({ type: 'workspace-read', id }, workspaceReadSchema);
+        images.push({ id, name: item.name, width: result.document.image.canonical.width,
+          height: result.document.image.canonical.height, png: result.media });
+      }
+      return images;
+    },
+    async preview(input) {
+      const schema = schemaRef.current;
+      if (!schema) throw new EditorRequestError('failed', 'The workspace is locked.');
+      const created = missingClasses(input, schema);
+      const plans = await planEditorEdits(input, withClasses(schema, created));
+      return [editorSummary(plans, created), ...plans.map(({ document, plan }) =>
+        `${document.image.name}: +${plan.added.length} / ~${plan.updated} / −${plan.removed}`)];
+    },
+    apply(input) {
+      return exclusive(async (): Promise<AppliedBatch> => {
+        let schema = schemaRef.current;
+        if (!schema) throw new EditorRequestError('failed', 'The workspace is locked.');
+        const created = missingClasses(input, schema);
+        // Validate every image before writing anything, so a bad request changes nothing.
+        await planEditorEdits(input, withClasses(schema, created));
+        if (created.length) schema = await saveEditorSchema(withClasses(schema, created));
+        const plans = await planEditorEdits(input, schema);
+        const applied: { before: AnnotationDocument; after: AnnotationDocument }[] = [];
+        const images = [];
+        for (const { document, plan } of plans) {
+          const after = plan.commands.length ? await commitEditorChange(document, plan.commands) : document;
+          if (plan.commands.length) applied.push({ before: document, after });
+          images.push({ id: document.image.id, revision: after.revision, added: plan.added, updated: plan.updated, removed: plan.removed });
+        }
+        const summary = editorSummary(plans, created);
+        return {
+          result: { state: 'applied', createdClasses: created, images }, summary,
+          undo: () => exclusive(async () => {
+            let restored = 0, kept = 0;
+            for (const { before, after } of [...applied].reverse()) {
+              const { document: latest } = await readForEditor(after.image.id).catch(() => ({ document: null }));
+              if (!latest) { kept++; continue; }
+              const current = schemaRef.current ?? schema;
+              const original = applyDatasetSchema(before, current), edited = applyDatasetSchema(after, current);
+              const same = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
+              const commands: Command[] = [];
+              // Revert only what the AI changed and only where it is still exactly as the AI left it.
+              for (const change of diffDocuments(original, { ...edited, revision: original.revision })) {
+                if (change.type === 'review') {
+                  if (latest.review === edited.review) commands.push({ type: 'review', review: original.review }); else kept++;
+                  continue;
+                }
+                const id = change.type === 'put' ? change.annotation.id : change.id;
+                const now = latest.annotations.find(item => item.id === id);
+                const then = original.annotations.find(item => item.id === id);
+                if (!same(now, change.type === 'put' ? change.annotation : undefined)) { kept++; continue; }
+                commands.push(then ? { type: 'put', annotation: then } : { type: 'remove', id });
+              }
+              if (commands.length) { await commitEditorChange(latest, commands); restored++; }
+            }
+            return `Undid AI edits on ${restored} image${restored === 1 ? '' : 's'}${kept ? `; kept ${kept} item${kept === 1 ? '' : 's'} you changed since` : ''}.`;
+          }),
+        };
+      });
+    },
+  });
 
   async function undoRedo(direction: 'undo' | 'redo') {
     if (!history.current || !current) return;
@@ -1450,7 +1631,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
   }
 
   function handleKeys(event: KeyboardEvent<HTMLElement>) {
-    if (exportOpen || archiveMode || cloudVisionOpen || bridgeOpen) return;
+    if (exportOpen || archiveMode || cloudVisionOpen) return;
     if (event.target instanceof HTMLElement &&
         (event.target.matches('input, select, textarea') || event.target.isContentEditable)) return;
     if (busy) return;
@@ -1619,6 +1800,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
 
   function lockWorkspace(automatic = false) {
     if (running.current) return;
+    if (editorBridge.status.state !== 'idle') void editorBridge.disconnect();
     stopLiveSession('The host locked the workspace.');
     storage.current?.close(); media.current?.close();
     storage.current = null; media.current = null; history.current = null;
@@ -1660,7 +1842,6 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
   ].filter(Boolean).join(' ');
 
   function returnToDataset() {
-    setBridgeOpen(false);
     setCloudVisionOpen(false);
     cancelGesture(); setPolygon([]); setPolygonCursor(null); setCurrent(null); setSelected(null); history.current = null;
     maskPixels.current.clear(); setMaskUrls(new Map());
@@ -1692,9 +1873,10 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
           onClick={showExport}><span className="step-number" aria-hidden="true">3</span>Export</button>}
       </div>
       <div className="project-nav-utilities">
-        {current && !guest && <button type="button" disabled={busy} onClick={() => setBridgeOpen(true)}>
-          Local MCP companion
-        </button>}
+        {!guest && <button type="button" aria-expanded={editorOpen}
+          className={editorBridge.status.state === 'connected' ? 'live-badge' : undefined}
+          onClick={() => setEditorOpen(previous => !previous)}>{editorBridge.status.state === 'connected'
+            ? `${editorBridge.editorName} connected` : 'AI editor'}{editorBridge.pending ? ` · ${editorBridge.pending} waiting` : ''}</button>}
         {current && !guest && <button type="button" disabled={busy || !current.document.classes.length}
           onClick={() => setCloudVisionOpen(true)}>AI suggestions</button>}
         {!guest && <button type="button" disabled={busy || !!liveHost.current} aria-expanded={persistentSharingOpen}
@@ -1796,6 +1978,7 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
           await refreshIndex(0);
           if (currentRef.current) await openImage(currentRef.current.document.image.id);
         }} />}
+      {(editorOpen || editorBridge.pending > 0) && !guest && <EditorPanel bridge={editorBridge} onClose={() => setEditorOpen(false)} />}
       {sharingOpen && !guest && <LiveSharePanel host={liveHost.current} mode={liveMode} onMode={setLiveMode}
         onStart={() => void perform(startLiveSession)} onStop={() => { stopLiveSession(); setLiveRevision(value => value + 1); }}
         ended={liveEnded} busy={busy} images={imageIndex} onClose={() => setSharingOpen(false)} />}
@@ -2481,13 +2664,6 @@ export function Workspace({ descriptor, initialPassphrase, onPassphraseConsumed,
       imageSize={current.document.image.canonical}
       onClose={() => setCloudVisionOpen(false)}
       onAccept={addCloudSuggestions}
-    /></Suspense>}
-    {bridgeOpen && current && !guest && <Suspense fallback={<p role="status">Loading local companion controls…</p>}><BridgePanel
-      key={current.document.image.id}
-      workspaceId={descriptor.id}
-      document={current.document}
-      onClose={() => setBridgeOpen(false)}
-      onApplyProposal={applyBridgeCommands}
     /></Suspense>}
     {error && !exportOpen && !archiveMode && <div className="error" role="alert">{error}</div>}
     {notice && !current && <p className="workspace-notice" role="status">{notice}</p>}

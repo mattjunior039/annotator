@@ -25,7 +25,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     process.stdout.once('error', stop);
     process.once('SIGTERM', stop);
     process.once('SIGINT', stop);
-    await mcp.connect(new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize: MAX_BYTES }));
+    await mcp.connect(new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize: 16 * MAX_BYTES }));
   } catch {
     // Never log exceptions, requests, tokens, data, or SDK diagnostics.
     process.stderr.write('Bridge could not start.\n');
