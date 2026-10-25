@@ -28,21 +28,26 @@ export function App({ initialShare = '' }: { initialShare?: string }) {
   const [labOpen, setLabOpen] = useState(false);
   const [capabilities] = useState(detectCapabilities);
   const running = useRef(false);
+  const userAction = useRef(false);
   const canStore = capabilities.filter(item => item.requiredFor === 'vault').every(item => item.available);
 
-  async function catalog(action: (client: WorkerClient) => Promise<void>) {
-    if (running.current) return;
-    running.current = true; setBusy(true); setError('');
+  async function catalog(action: (client: WorkerClient) => Promise<void>, quiet = false) {
+    if (quiet ? running.current : userAction.current) return;
+    if (!quiet) userAction.current = true;
+    while (running.current) await new Promise(resolve => setTimeout(resolve, 25));
+    running.current = true;
+    // Background refreshes must not disable controls: the click that focused the window would be lost.
+    if (!quiet) { setBusy(true); setError(''); }
     let client: WorkerClient | undefined;
     try {
       client = new WorkerClient(new Worker(new URL('../workers/storage.worker.ts', import.meta.url), { type: 'module' }));
       await action(client);
     }
-    catch (failure) { setError(failure instanceof Error ? failure.message : 'Unable to open the local workspace catalog.'); }
-    finally { client?.close(); running.current = false; setBusy(false); }
+    catch (failure) { if (!quiet) setError(failure instanceof Error ? failure.message : 'Unable to open the local workspace catalog.'); }
+    finally { client?.close(); running.current = false; if (!quiet) { userAction.current = false; setBusy(false); } }
   }
-  async function refresh() {
-    await catalog(async client => setWorkspaces(await client.request({ type: 'catalog-list' }, workspaceCatalogSchema)));
+  async function refresh(quiet = false) {
+    await catalog(async client => setWorkspaces(await client.request({ type: 'catalog-list' }, workspaceCatalogSchema)), quiet);
   }
   useEffect(() => {
     if (!canStore) { setBusy(false); return; }
@@ -50,7 +55,7 @@ export function App({ initialShare = '' }: { initialShare?: string }) {
   }, [active, labOpen]);
   useEffect(() => {
     if (!canStore || active || labOpen || creating || deleting || importing) return;
-    const refreshOnFocus = () => { void refresh(); };
+    const refreshOnFocus = () => { void refresh(true); };
     window.addEventListener('focus', refreshOnFocus);
     return () => window.removeEventListener('focus', refreshOnFocus);
   }, [active, labOpen, creating, deleting, importing]);

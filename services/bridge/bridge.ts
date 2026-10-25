@@ -34,13 +34,26 @@ export class Bridge {
   private readonly origins: readonly string[];
   private readonly now: () => number;
   private readonly jobTimeout: number;
+  private readonly readyWait: number;
   private pending: Pending | undefined;
   private session: Session | undefined;
   private limits = new Map<string, { until: number; count: number }>();
   private audit: { event: AuditEvent; at: number }[] = [];
 
-  constructor(origins: readonly string[], now = Date.now, jobTimeout = JOB_TTL) {
-    this.origins = origins; this.now = now; this.jobTimeout = jobTimeout;
+  constructor(origins: readonly string[], now = Date.now, jobTimeout = JOB_TTL, readyWait = 8000) {
+    this.origins = origins; this.now = now; this.jobTimeout = jobTimeout; this.readyWait = readyWait;
+  }
+
+  // Editors call tools right after bridge_pair; give the browser a moment to pick up the pairing or resume polling.
+  private async ready() {
+    const deadline = Date.now() + this.readyWait;
+    for (;;) {
+      this.sweep();
+      const session = this.session, switching = !!this.pending?.confirmed;
+      const online = !!session && this.now() - session.lastPoll < OFFLINE_AFTER;
+      if ((online && !switching) || (!session && !switching) || Date.now() >= deadline) return;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
   }
 
   limit(bucket: 'http' | 'pair' | 'code' | 'tool', max: number) {
@@ -164,8 +177,8 @@ export class Bridge {
   }
 
   /** Forward a validated editor request to the paired browser and wait for its answer. */
-  call(kind: JobKind, args: unknown): Promise<unknown> {
-    this.sweep();
+  async call(kind: JobKind, args: unknown): Promise<unknown> {
+    await this.ready();
     const session = this.session, spec = jobKinds[kind];
     if (!session) return Promise.reject(new BridgeError('denied', 'Not connected. Open the website, click Connect, then call bridge_pair with the code shown.'));
     if (!session.scopes.includes(spec.scope)) return Promise.reject(new BridgeError('denied', `The website did not grant the "${spec.scope}" permission.`));

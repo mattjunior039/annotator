@@ -7,7 +7,7 @@ import type { Scope } from './protocol.ts';
 export const origin = 'http://127.0.0.1:5173';
 export function fixture(jobTimeout = 1000) {
   let time = 1000;
-  const bridge = new Bridge([origin], () => time, jobTimeout);
+  const bridge = new Bridge([origin], () => time, jobTimeout, 0);
   const workspaceId = randomUUID();
   const connect = (scopes: Scope[] = ['metadata', 'pixels', 'propose']) => {
     const request = bridge.requestPair(origin, { type: 'pair-request', workspaceId, scopes });
@@ -16,8 +16,9 @@ export function fixture(jobTimeout = 1000) {
     if (paired.state !== 'paired') throw new Error('not paired');
     return paired.bearer;
   };
-  const poll = (bearer: string) => bridge.browser(origin, bearer, { type: 'poll' }) as {
-    jobs: { id: string; kind: string; args: unknown }[];
+  const poll = async (bearer: string) => {
+    await new Promise(resolve => setTimeout(resolve, 0));
+    return bridge.browser(origin, bearer, { type: 'poll' }) as { jobs: { id: string; kind: string; args: unknown }[] };
   };
   return { bridge, workspaceId, connect, poll, advance: (ms: number) => { time += ms; } };
 }
@@ -75,9 +76,9 @@ describe('editor requests forwarded to the browser', () => {
     const f = fixture();
     const bearer = f.connect();
     const pending = f.bridge.call('list', { limit: 10, review: 'unannotated' });
-    const { jobs } = f.poll(bearer);
+    const { jobs } = await f.poll(bearer);
     expect(jobs).toEqual([{ id: expect.any(String), kind: 'list', args: { limit: 10, review: 'unannotated' } }]);
-    expect(f.poll(bearer).jobs).toEqual([]);
+    expect((await f.poll(bearer)).jobs).toEqual([]);
     f.bridge.browser(origin, bearer, { type: 'result', jobId: jobs[0]!.id, ok: true, value: listResult });
     await expect(pending).resolves.toEqual(listResult);
     expect(() => f.bridge.browser(origin, bearer, { type: 'result', jobId: jobs[0]!.id, ok: true, value: listResult })).toThrow('stale');
@@ -87,7 +88,7 @@ describe('editor requests forwarded to the browser', () => {
     const f = fixture();
     const bearer = f.connect();
     const pending = f.bridge.call('list', {});
-    const job = f.poll(bearer).jobs[0]!;
+    const job = (await f.poll(bearer)).jobs[0]!;
     const leaked = { ...listResult, images: [{ ...listResult.images[0], name: 'patient-42.png' }] };
     f.bridge.browser(origin, bearer, { type: 'result', jobId: job.id, ok: true, value: leaked });
     await expect(pending).rejects.toMatchObject({ code: 'failed' });
@@ -105,7 +106,7 @@ describe('editor requests forwarded to the browser', () => {
     const tooMany = Array.from({ length: 7 }, () => randomUUID());
     await expect(full.bridge.call('images', { imageIds: tooMany })).rejects.toMatchObject({ code: 'invalid' });
     const viewing = full.bridge.call('images', { imageIds: [randomUUID()] });
-    const job = full.poll(fullBearer).jobs[0]!;
+    const job = (await full.poll(fullBearer)).jobs[0]!;
     full.bridge.browser(origin, fullBearer, { type: 'result', jobId: job.id, ok: false, error: 'declined', message: 'User declined.' });
     await expect(viewing).rejects.toMatchObject({ code: 'declined', detail: 'User declined.' });
     full.advance(OFFLINE_AFTER);
@@ -120,7 +121,7 @@ describe('editor requests forwarded to the browser', () => {
     const pending = f.bridge.call('list', {});
     f.bridge.browser(origin, bearer, { type: 'revoke' });
     await expect(pending).rejects.toBeInstanceOf(BridgeError);
-    expect(() => f.poll(bearer)).toThrow('denied');
+    await expect(f.poll(bearer)).rejects.toThrow('denied');
   });
 
   it('validates annotate inputs: unique images, operation bounds and either box or polygon', async () => {
@@ -135,11 +136,30 @@ describe('editor requests forwarded to the browser', () => {
     ]) await expect(f.bridge.call('annotate', bad)).rejects.toMatchObject({ code: 'invalid' });
   });
 
+  it('waits briefly for the browser to pick up a just-confirmed pairing', async () => {
+    let time = 1000;
+    const bridge = new Bridge([origin], () => time, 1000, 2000);
+    const workspaceId = randomUUID();
+    const request = bridge.requestPair(origin, { type: 'pair-request', workspaceId, scopes: ['metadata'] });
+    bridge.confirmPair({ code: request.code });
+    const pending = bridge.call('list', {});
+    await new Promise(resolve => setTimeout(resolve, 150));
+    const paired = bridge.checkPair(origin, { type: 'pair-check', ticket: request.ticket });
+    if (paired.state !== 'paired') throw new Error('not paired');
+    let job: { id: string } | undefined;
+    for (let i = 0; i < 20 && !job; i++) {
+      job = (bridge.browser(origin, paired.bearer, { type: 'poll' }) as { jobs: { id: string }[] }).jobs[0];
+      if (!job) await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    bridge.browser(origin, paired.bearer, { type: 'result', jobId: job!.id, ok: true, value: listResult });
+    await expect(pending).resolves.toEqual(listResult);
+  });
+
   it('keeps the audit trail free of identifiers and content', async () => {
     const f = fixture();
     const bearer = f.connect();
     const pending = f.bridge.call('list', {});
-    const job = f.poll(bearer).jobs[0]!;
+    const job = (await f.poll(bearer)).jobs[0]!;
     f.bridge.browser(origin, bearer, { type: 'result', jobId: job.id, ok: true, value: listResult });
     await pending;
     const text = JSON.stringify(f.bridge.status());
